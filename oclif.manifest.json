@@ -2051,6 +2051,205 @@
         "transition.js"
       ]
     },
+    "receipt:get": {
+      "aliases": [],
+      "args": {
+        "mandateId": {
+          "description": "Mandate ID",
+          "name": "mandateId",
+          "required": true
+        },
+        "receiptId": {
+          "description": "Receipt ID",
+          "name": "receiptId",
+          "required": true
+        }
+      },
+      "description": "Get receipt details",
+      "flags": {
+        "json": {
+          "description": "Output as JSON",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "receipt:get",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "receipt",
+        "get.js"
+      ]
+    },
+    "receipt:list": {
+      "aliases": [],
+      "args": {
+        "mandateId": {
+          "description": "Mandate ID",
+          "name": "mandateId",
+          "required": true
+        }
+      },
+      "description": "List receipts for a mandate",
+      "flags": {
+        "json": {
+          "description": "Output as JSON",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "all": {
+          "description": "Stream all pages as NDJSON",
+          "name": "all",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "receipt:list",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "receipt",
+        "list.js"
+      ]
+    },
+    "receipt:submit": {
+      "aliases": [],
+      "args": {
+        "mandateId": {
+          "description": "Mandate ID",
+          "name": "mandateId",
+          "required": true
+        }
+      },
+      "description": "Submit a receipt (evidence of completion) for a mandate",
+      "flags": {
+        "json": {
+          "description": "Output as JSON",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "data": {
+          "description": "Evidence as JSON string",
+          "name": "data",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "file": {
+          "description": "Read evidence from JSON file",
+          "name": "file",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "dry-run": {
+          "description": "Show what would be sent without hitting the API",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "receipt:submit",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "receipt",
+        "submit.js"
+      ]
+    },
     "schema:blank-template": {
       "aliases": [],
       "args": {},
@@ -3040,205 +3239,6 @@
         "versions.js"
       ]
     },
-    "receipt:get": {
-      "aliases": [],
-      "args": {
-        "mandateId": {
-          "description": "Mandate ID",
-          "name": "mandateId",
-          "required": true
-        },
-        "receiptId": {
-          "description": "Receipt ID",
-          "name": "receiptId",
-          "required": true
-        }
-      },
-      "description": "Get receipt details",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "receipt:get",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "receipt",
-        "get.js"
-      ]
-    },
-    "receipt:list": {
-      "aliases": [],
-      "args": {
-        "mandateId": {
-          "description": "Mandate ID",
-          "name": "mandateId",
-          "required": true
-        }
-      },
-      "description": "List receipts for a mandate",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "all": {
-          "description": "Stream all pages as NDJSON",
-          "name": "all",
-          "allowNo": false,
-          "type": "boolean"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "receipt:list",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "receipt",
-        "list.js"
-      ]
-    },
-    "receipt:submit": {
-      "aliases": [],
-      "args": {
-        "mandateId": {
-          "description": "Mandate ID",
-          "name": "mandateId",
-          "required": true
-        }
-      },
-      "description": "Submit a receipt (evidence of completion) for a mandate",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "data": {
-          "description": "Evidence as JSON string",
-          "name": "data",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "file": {
-          "description": "Read evidence from JSON file",
-          "name": "file",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "dry-run": {
-          "description": "Show what would be sent without hitting the API",
-          "name": "dry-run",
-          "allowNo": false,
-          "type": "boolean"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "receipt:submit",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "receipt",
-        "submit.js"
-      ]
-    },
     "verdict:render": {
       "aliases": [],
       "args": {
@@ -3497,5 +3497,5 @@
       ]
     }
   },
-  "version": "0.4.0"
+  "version": "0.4.1"
 }

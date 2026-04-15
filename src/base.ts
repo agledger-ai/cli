@@ -136,10 +136,13 @@ export abstract class BaseCommand extends Command {
     throw new Error('unreachable');
   }
 
-  /** Forward the full API error body to stderr — adds only `error: true`. */
+  /** Forward the full API error body to stderr — enriches with recovery suggestion if missing. */
   protected handleApiError(response: ApiResponse): never {
     const body = (response.body ?? {}) as Record<string, unknown>;
     const exitCode = this.statusToExitCode(response.status);
+    if (!body.suggestion) {
+      body.suggestion = this.recoveryHint(response.status);
+    }
     const error: Record<string, unknown> = { error: true, ...body };
     process.stderr.write(JSON.stringify(error) + '\n');
     this.exit(exitCode);
@@ -150,12 +153,27 @@ export abstract class BaseCommand extends Command {
     // Re-throw oclif exit errors — already handled by handleApiError/failWith
     if (err instanceof Error && err.message.startsWith('EEXIT:')) throw err;
     if (err instanceof DOMException && err.name === 'AbortError') {
-      this.failWith('TIMEOUT', 'Request timed out.', ExitCode.TIMEOUT);
+      this.failWith('TIMEOUT', 'Request timed out.', ExitCode.TIMEOUT,
+        'Retry the same command. If it persists, run "agledger status" to check API connectivity.');
     }
     if (err instanceof TypeError && String(err.message).includes('fetch')) {
-      this.failWith('NETWORK_ERROR', String(err.message), ExitCode.NETWORK_ERROR);
+      this.failWith('NETWORK_ERROR', String(err.message), ExitCode.NETWORK_ERROR,
+        'Check that AGLEDGER_API_URL is correct. Run "agledger status" to verify connectivity.');
     }
-    this.failWith('UNKNOWN_ERROR', err instanceof Error ? err.message : String(err), ExitCode.GENERAL_ERROR);
+    this.failWith('UNKNOWN_ERROR', err instanceof Error ? err.message : String(err), ExitCode.GENERAL_ERROR,
+      'Run "agledger list-commands" to see available commands.');
+  }
+
+  private recoveryHint(status: number): string {
+    if (status === 400) return 'Check required fields. Run "agledger schema list" to see valid contract types, or "agledger schema get <type>" for the exact schema.';
+    if (status === 401) return 'API key is invalid or expired. Set AGLEDGER_API_KEY or use --api-key.';
+    if (status === 403) return 'Your API key lacks the required scope. Check the missingScopes field above.';
+    if (status === 404) return 'Resource not found. Run "agledger list-commands" to verify the command, or check the resource ID.';
+    if (status === 409) return 'Conflict — the resource state does not allow this action. Run "agledger mandate get <id>" to check current status.';
+    if (status === 422) return 'Validation failed. Check the validationErrors field above. Run "agledger schema get <type>" for the expected format.';
+    if (status === 429) return 'Rate limited. Wait a moment, then retry the same command.';
+    if (status >= 500) return 'Server error. Retry the same command. If it persists, run "agledger status" to check API health.';
+    return 'Run "agledger list-commands" to see available commands.';
   }
 
   private statusToExitCode(status: number): number {
