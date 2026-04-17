@@ -1,12 +1,122 @@
 {
   "commands": {
+    "api": {
+      "aliases": [],
+      "args": {
+        "method": {
+          "description": "HTTP method (GET, POST, PUT, PATCH, DELETE)",
+          "name": "method",
+          "required": true
+        },
+        "path": {
+          "description": "Full API path including version prefix (e.g. /v1/mandates, /health, /federation/v1/register)",
+          "name": "path",
+          "required": true
+        }
+      },
+      "description": "Call any AGLedger API endpoint. Pass-through with zero flag translation — use the exact path and body shape documented in the API (see `agledger discover` or GET /openapi.json).",
+      "examples": [
+        "agledger api GET /health",
+        "agledger api GET /v1/mandates -F status=ACTIVE -F limit=50",
+        "agledger api POST /v1/mandates --data '{\"contractType\":\"ACH-PROC-v1\",\"criteria\":{\"item_spec\":\"...\"}}'",
+        "agledger api POST /v1/mandates -F contractType=ACH-PROC-v1 -F criteria.item_spec=widgets -F criteria.quantity.target=500",
+        "agledger api POST /v1/mandates --input payload.json",
+        "cat payload.json | agledger api POST /v1/mandates --input -",
+        "agledger api GET /v1/mandates --paginate  # streams all pages as NDJSON"
+      ],
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "data": {
+          "description": "Request body as a JSON string. For GET/DELETE, used as query parameters.",
+          "name": "data",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "input": {
+          "description": "Read body JSON from file (or \"-\" for stdin). Shape matches --data.",
+          "name": "input",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "field": {
+          "char": "F",
+          "description": "Set a field as key=value. Values are typed: true/false/null, numbers, or JSON for {...}/[...]. Supports nested (a.b.c=v) and array append (arr[]=v). Repeatable.",
+          "name": "field",
+          "hasDynamicHelp": false,
+          "multiple": true,
+          "type": "option"
+        },
+        "query": {
+          "description": "Extra query parameters as JSON. Merges over -F fields and --data for GET/DELETE routing.",
+          "name": "query",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "paginate": {
+          "description": "Follow cursor pagination, stream all results as NDJSON. Requires GET on a paginated route.",
+          "name": "paginate",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "dry-run": {
+          "description": "Show the request that would be sent without calling the API.",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "api",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "api.js"
+      ]
+    },
     "auth": {
       "aliases": [],
       "args": {},
-      "description": "Check current authentication status",
+      "description": "Check current authentication status. Returns `authenticated: false` when no key is configured (exit 0).",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -49,11 +159,139 @@
         "auth.js"
       ]
     },
+    "config": {
+      "aliases": [],
+      "args": {
+        "action": {
+          "description": "Action: list, get, use, path",
+          "name": "action",
+          "options": [
+            "list",
+            "get",
+            "use",
+            "path"
+          ],
+          "required": true
+        },
+        "profile": {
+          "description": "Profile name (for `use`)",
+          "name": "profile"
+        }
+      },
+      "description": "Inspect or switch between stored profiles in ~/.agledger/config.json",
+      "examples": [
+        "agledger config list                # list all profiles",
+        "agledger config get                  # show active profile",
+        "agledger config get --profile prod   # show a specific profile",
+        "agledger config use prod             # set prod as the active profile",
+        "agledger config path                 # print the config file path"
+      ],
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "profile": {
+          "description": "Profile name to inspect (for `get`)",
+          "name": "profile",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "config",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "config.js"
+      ]
+    },
+    "discover": {
+      "aliases": [],
+      "args": {},
+      "description": "Check API health and current identity, and return the quickstart workflow. Call this first.",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "discover",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "discover.js"
+      ]
+    },
     "help-json": {
       "aliases": [],
       "args": {
         "command": {
-          "description": "Command name (e.g., \"mandate create\")",
+          "description": "CLI command name (e.g., \"api\", \"discover\", \"login\")",
           "name": "command",
           "required": true
         }
@@ -61,7 +299,7 @@
       "description": "Get JSON schema for a specific command (agent discovery)",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -107,10 +345,10 @@
     "list-commands": {
       "aliases": [],
       "args": {},
-      "description": "List all available commands (agent discovery)",
+      "description": "List all CLI commands (for agent discovery). Most API work goes through `agledger api`.",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -156,10 +394,10 @@
     "login": {
       "aliases": [],
       "args": {},
-      "description": "Authenticate and store credentials in ~/.agledger/",
+      "description": "Verify an API key and store it in ~/.agledger/config.json (0600)",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -210,13 +448,76 @@
         "login.js"
       ]
     },
+    "logout": {
+      "aliases": [],
+      "args": {},
+      "description": "Remove a stored profile from ~/.agledger/config.json",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "profile": {
+          "description": "Profile name to remove",
+          "name": "profile",
+          "default": "default",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "all": {
+          "description": "Remove all profiles",
+          "name": "all",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "logout",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "logout.js"
+      ]
+    },
     "status": {
       "aliases": [],
       "args": {},
       "description": "Check AGLedger API health and status",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -265,7 +566,7 @@
       "description": "List vault signing public keys for independent audit chain verification",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -314,7 +615,7 @@
       "description": "Create a new agent (platform admin). Slug is auto-generated if omitted.",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -392,7 +693,7 @@
       "description": "Create a new enterprise (platform admin). Slug is auto-generated if omitted.",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -483,7 +784,7 @@
       "description": "Set an enterprise's approval configuration (PUT). Omitted fields are removed.",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -553,7 +854,7 @@
       "description": "List agents in an enterprise",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -587,6 +888,27 @@
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
+        },
+        "limit": {
+          "description": "Max results per page",
+          "name": "limit",
+          "default": 25,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "cursor": {
+          "description": "Pagination cursor",
+          "name": "cursor",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "all": {
+          "description": "Stream all pages as NDJSON",
+          "name": "all",
+          "allowNo": false,
+          "type": "boolean"
         }
       },
       "hasDynamicHelp": false,
@@ -617,7 +939,7 @@
       "description": "Get reputation score for an agent",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -661,13 +983,1580 @@
         "reputation.js"
       ]
     },
+    "receipt:get": {
+      "aliases": [],
+      "args": {
+        "mandateId": {
+          "description": "Mandate ID",
+          "name": "mandateId",
+          "required": true
+        },
+        "receiptId": {
+          "description": "Receipt ID",
+          "name": "receiptId",
+          "required": true
+        }
+      },
+      "description": "Get receipt details",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "receipt:get",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "receipt",
+        "get.js"
+      ]
+    },
+    "receipt:list": {
+      "aliases": [
+        "mandate:receipts"
+      ],
+      "args": {
+        "mandateId": {
+          "description": "Mandate ID",
+          "name": "mandateId",
+          "required": true
+        }
+      },
+      "description": "List receipts for a mandate",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "all": {
+          "description": "Stream all pages as NDJSON",
+          "name": "all",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "receipt:list",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "receipt",
+        "list.js"
+      ]
+    },
+    "receipt:submit": {
+      "aliases": [],
+      "args": {
+        "mandateId": {
+          "description": "Mandate ID",
+          "name": "mandateId",
+          "required": true
+        }
+      },
+      "description": "Submit a receipt (evidence of completion) for a mandate",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "data": {
+          "description": "Evidence as JSON string. Either a raw evidence object or { \"evidence\": {...} } — both are accepted.",
+          "name": "data",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "file": {
+          "description": "Read evidence from JSON file (same shape as --data)",
+          "name": "file",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "dry-run": {
+          "description": "Show what would be sent without hitting the API",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "receipt:submit",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "receipt",
+        "submit.js"
+      ]
+    },
+    "mandate:accept": {
+      "aliases": [],
+      "args": {
+        "id": {
+          "description": "Mandate ID",
+          "name": "id",
+          "required": true
+        }
+      },
+      "description": "Accept a proposed mandate (as performer)",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "dry-run": {
+          "description": "Show what would be sent without hitting the API",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "mandate:accept",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "mandate",
+        "accept.js"
+      ]
+    },
+    "mandate:batch": {
+      "aliases": [],
+      "args": {},
+      "description": "Fetch multiple mandates by ID (up to 100). Outputs NDJSON.",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "ids": {
+          "description": "Comma-separated mandate IDs",
+          "name": "ids",
+          "required": true,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "mandate:batch",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "mandate",
+        "batch.js"
+      ]
+    },
+    "mandate:cancel": {
+      "aliases": [],
+      "args": {
+        "id": {
+          "description": "Mandate ID",
+          "name": "id",
+          "required": true
+        }
+      },
+      "description": "Cancel a mandate",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "reason": {
+          "description": "Cancellation reason",
+          "name": "reason",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "dry-run": {
+          "description": "Show what would be sent without hitting the API",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "mandate:cancel",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "mandate",
+        "cancel.js"
+      ]
+    },
+    "mandate:chain": {
+      "aliases": [],
+      "args": {
+        "id": {
+          "description": "Mandate ID",
+          "name": "id",
+          "required": true
+        }
+      },
+      "description": "Get full delegation chain for a mandate",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "mandate:chain",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "mandate",
+        "chain.js"
+      ]
+    },
+    "mandate:counter-propose": {
+      "aliases": [],
+      "args": {
+        "id": {
+          "description": "Mandate ID",
+          "name": "id",
+          "required": true
+        }
+      },
+      "description": "Counter-propose a mandate with revised terms (as performer)",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "data": {
+          "description": "Counter-proposal data as JSON string (counterCriteria, message)",
+          "name": "data",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "file": {
+          "description": "Read counter-proposal data from JSON file",
+          "name": "file",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "dry-run": {
+          "description": "Show what would be sent without hitting the API",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "mandate:counter-propose",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "mandate",
+        "counter-propose.js"
+      ]
+    },
+    "mandate:create": {
+      "aliases": [],
+      "args": {},
+      "description": "Create a new mandate",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "type": {
+          "description": "Contract type (e.g., ACH-PROC-v1)",
+          "name": "type",
+          "required": true,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "performer": {
+          "description": "Performer agent ID",
+          "name": "performer",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "data": {
+          "description": "Mandate data as JSON string",
+          "name": "data",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "file": {
+          "description": "Read mandate data from JSON file",
+          "name": "file",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "max-submissions": {
+          "description": "Max receipt submissions allowed (1-100)",
+          "name": "max-submissions",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "activate": {
+          "description": "Auto-activate on principal keys (sets autoActivate in body). Not supported on agent keys — agent-created mandates go through PROPOSED → accept → ACTIVE; use `mandate accept` then `mandate transition <id> activate`.",
+          "name": "activate",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "dry-run": {
+          "description": "Show what would be sent without hitting the API",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "mandate:create",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "mandate",
+        "create.js"
+      ]
+    },
+    "mandate:get": {
+      "aliases": [],
+      "args": {
+        "id": {
+          "description": "Mandate ID",
+          "name": "id",
+          "required": true
+        }
+      },
+      "description": "Get mandate details by ID",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "mandate:get",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "mandate",
+        "get.js"
+      ]
+    },
+    "mandate:list": {
+      "aliases": [],
+      "args": {},
+      "description": "List mandates with optional filters",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "status": {
+          "description": "Filter by mandate status (PROPOSED, REJECTED, CREATED, ACTIVE, PROCESSING, REVISION_REQUESTED, FULFILLED, FAILED, REMEDIATED, EXPIRED, CANCELLED)",
+          "name": "status",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "type": {
+          "description": "Filter by contract type (e.g., ACH-PROC-v1)",
+          "name": "type",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "limit": {
+          "description": "Max results per page",
+          "name": "limit",
+          "default": 25,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "cursor": {
+          "description": "Pagination cursor",
+          "name": "cursor",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "all": {
+          "description": "Stream all pages as NDJSON",
+          "name": "all",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "mandate:list",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "mandate",
+        "list.js"
+      ]
+    },
+    "mandate:outcome": {
+      "aliases": [],
+      "args": {
+        "id": {
+          "description": "Mandate ID",
+          "name": "id",
+          "required": true
+        },
+        "outcome": {
+          "description": "PASS or FAIL. Alternative: --outcome",
+          "name": "outcome",
+          "options": [
+            "PASS",
+            "FAIL"
+          ]
+        }
+      },
+      "description": "Report principal verdict on a receipt (PASS or FAIL with settlement signal). Outcome can be given positionally or via --outcome.",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "receipt-id": {
+          "description": "Receipt ID to judge",
+          "name": "receipt-id",
+          "required": true,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "outcome": {
+          "description": "PASS or FAIL — alternative to positional arg",
+          "name": "outcome",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "options": [
+            "PASS",
+            "FAIL"
+          ],
+          "type": "option"
+        },
+        "reason": {
+          "description": "Reason for the verdict",
+          "name": "reason",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "signal": {
+          "description": "Settlement signal (settle, hold, escalate)",
+          "name": "signal",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "dry-run": {
+          "description": "Show what would be sent without hitting the API",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "mandate:outcome",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "mandate",
+        "outcome.js"
+      ]
+    },
+    "mandate:receipts": {
+      "aliases": [],
+      "args": {
+        "mandateId": {
+          "description": "Mandate ID",
+          "name": "mandateId",
+          "required": true
+        }
+      },
+      "description": "List receipts for a mandate (alias of `receipt list`)",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "all": {
+          "description": "Stream all pages as NDJSON",
+          "name": "all",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "mandate:receipts",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "mandate",
+        "receipts.js"
+      ]
+    },
+    "mandate:reject": {
+      "aliases": [],
+      "args": {
+        "id": {
+          "description": "Mandate ID",
+          "name": "id",
+          "required": true
+        }
+      },
+      "description": "Reject a proposed mandate (as performer)",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "reason": {
+          "description": "Rejection reason",
+          "name": "reason",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "dry-run": {
+          "description": "Show what would be sent without hitting the API",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "mandate:reject",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "mandate",
+        "reject.js"
+      ]
+    },
+    "mandate:request-revision": {
+      "aliases": [],
+      "args": {
+        "id": {
+          "description": "Mandate ID",
+          "name": "id",
+          "required": true
+        }
+      },
+      "description": "Request revision after principal rejection (rework loop)",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "reason": {
+          "description": "Reason for requesting revision",
+          "name": "reason",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "dry-run": {
+          "description": "Show what would be sent without hitting the API",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "mandate:request-revision",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "mandate",
+        "request-revision.js"
+      ]
+    },
+    "mandate:transition": {
+      "aliases": [],
+      "args": {
+        "id": {
+          "description": "Mandate ID",
+          "name": "id",
+          "required": true
+        },
+        "action": {
+          "description": "Transition action (e.g. activate, cancel). Alternative: --action",
+          "name": "action"
+        }
+      },
+      "description": "Transition mandate state. Action can be given positionally or via --action. Allowed actions depend on current state — see API schema or call without a valid action to see the error.",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "action": {
+          "description": "Transition action — alternative to positional arg (matches API body field name)",
+          "name": "action",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "reason": {
+          "description": "Transition reason",
+          "name": "reason",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "dry-run": {
+          "description": "Show what would be sent without hitting the API",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "mandate:transition",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "mandate",
+        "transition.js"
+      ]
+    },
+    "federation:audit-log": {
+      "aliases": [],
+      "args": {},
+      "description": "Query the federation audit log for gateway and mandate events.",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "gateway-id": {
+          "description": "Filter by gateway ID",
+          "name": "gateway-id",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "entry-type": {
+          "description": "Filter by audit entry type",
+          "name": "entry-type",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "mandate-id": {
+          "description": "Filter by mandate ID",
+          "name": "mandate-id",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "limit": {
+          "description": "Maximum number of entries to return",
+          "name": "limit",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "federation:audit-log",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "federation",
+        "audit-log.js"
+      ]
+    },
+    "federation:create-token": {
+      "aliases": [],
+      "args": {},
+      "description": "Create a federation registration token for gateway onboarding.",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "label": {
+          "description": "Human-readable label for the token",
+          "name": "label",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "expires-in-hours": {
+          "description": "Token expiry in hours (default: server-configured)",
+          "name": "expires-in-hours",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "dry-run": {
+          "description": "Show what would be sent without calling the API",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "federation:create-token",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "federation",
+        "create-token.js"
+      ]
+    },
+    "federation:health": {
+      "aliases": [],
+      "args": {},
+      "description": "Show federation health summary (gateway counts, sync status, uptime).",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "federation:health",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "federation",
+        "health.js"
+      ]
+    },
+    "federation:list-gateways": {
+      "aliases": [],
+      "args": {},
+      "description": "List federation gateways with optional status filter.",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "status": {
+          "description": "Filter by gateway status",
+          "name": "status",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "options": [
+            "active",
+            "suspended",
+            "revoked"
+          ],
+          "type": "option"
+        },
+        "limit": {
+          "description": "Maximum number of results to return",
+          "name": "limit",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "federation:list-gateways",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "federation",
+        "list-gateways.js"
+      ]
+    },
+    "federation:query-mandates": {
+      "aliases": [],
+      "args": {},
+      "description": "Query federated mandates across gateways.",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "gateway-id": {
+          "description": "Filter by originating gateway ID",
+          "name": "gateway-id",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "hub-state": {
+          "description": "Filter by hub-side mandate state",
+          "name": "hub-state",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "options": [
+            "OFFERED",
+            "ACCEPTED",
+            "ACTIVE",
+            "COMPLETED",
+            "DISPUTED",
+            "TERMINAL"
+          ],
+          "type": "option"
+        },
+        "contract-type": {
+          "description": "Filter by contract type (e.g. ACH-PROC-v1)",
+          "name": "contract-type",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "limit": {
+          "description": "Maximum number of results to return",
+          "name": "limit",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "federation:query-mandates",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "federation",
+        "query-mandates.js"
+      ]
+    },
+    "federation:revoke-gateway": {
+      "aliases": [],
+      "args": {
+        "gateway_id": {
+          "description": "Gateway ID to revoke",
+          "name": "gateway_id",
+          "required": true
+        }
+      },
+      "description": "Revoke a federation gateway, severing its connection to the hub.",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "reason": {
+          "description": "Reason for revocation",
+          "name": "reason",
+          "required": true,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "dry-run": {
+          "description": "Show what would be sent without calling the API",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "federation:revoke-gateway",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "federation",
+        "revoke-gateway.js"
+      ]
+    },
     "audit:events": {
       "aliases": [],
       "args": {},
       "description": "List audit events",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -764,7 +2653,7 @@
       "description": "Get the hash-chained audit trail for a mandate",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -808,1022 +2697,52 @@
         "trail.js"
       ]
     },
-    "federation:audit-log": {
-      "aliases": [],
-      "args": {},
-      "description": "Query the federation audit log for gateway and mandate events.",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "gateway-id": {
-          "description": "Filter by gateway ID",
-          "name": "gateway-id",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "entry-type": {
-          "description": "Filter by audit entry type",
-          "name": "entry-type",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "mandate-id": {
-          "description": "Filter by mandate ID",
-          "name": "mandate-id",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "limit": {
-          "description": "Maximum number of entries to return",
-          "name": "limit",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "federation:audit-log",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "federation",
-        "audit-log.js"
-      ]
-    },
-    "federation:create-token": {
-      "aliases": [],
-      "args": {},
-      "description": "Create a federation registration token for gateway onboarding.",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "label": {
-          "description": "Human-readable label for the token",
-          "name": "label",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "expires-in-hours": {
-          "description": "Token expiry in hours (default: server-configured)",
-          "name": "expires-in-hours",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "dry-run": {
-          "description": "Show what would be sent without calling the API",
-          "name": "dry-run",
-          "allowNo": false,
-          "type": "boolean"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "federation:create-token",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "federation",
-        "create-token.js"
-      ]
-    },
-    "federation:health": {
-      "aliases": [],
-      "args": {},
-      "description": "Show federation health summary (gateway counts, sync status, uptime).",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "federation:health",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "federation",
-        "health.js"
-      ]
-    },
-    "federation:list-gateways": {
-      "aliases": [],
-      "args": {},
-      "description": "List federation gateways with optional status filter.",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "status": {
-          "description": "Filter by gateway status",
-          "name": "status",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "options": [
-            "active",
-            "suspended",
-            "revoked"
-          ],
-          "type": "option"
-        },
-        "limit": {
-          "description": "Maximum number of results to return",
-          "name": "limit",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "federation:list-gateways",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "federation",
-        "list-gateways.js"
-      ]
-    },
-    "federation:query-mandates": {
-      "aliases": [],
-      "args": {},
-      "description": "Query federated mandates across gateways.",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "gateway-id": {
-          "description": "Filter by originating gateway ID",
-          "name": "gateway-id",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "hub-state": {
-          "description": "Filter by hub-side mandate state",
-          "name": "hub-state",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "options": [
-            "OFFERED",
-            "ACCEPTED",
-            "ACTIVE",
-            "COMPLETED",
-            "DISPUTED",
-            "TERMINAL"
-          ],
-          "type": "option"
-        },
-        "contract-type": {
-          "description": "Filter by contract type (e.g. ACH-PROC-v1)",
-          "name": "contract-type",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "limit": {
-          "description": "Maximum number of results to return",
-          "name": "limit",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "federation:query-mandates",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "federation",
-        "query-mandates.js"
-      ]
-    },
-    "federation:revoke-gateway": {
+    "verdict:render": {
       "aliases": [],
       "args": {
-        "gateway_id": {
-          "description": "Gateway ID to revoke",
-          "name": "gateway_id",
-          "required": true
-        }
-      },
-      "description": "Revoke a federation gateway, severing its connection to the hub.",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "reason": {
-          "description": "Reason for revocation",
-          "name": "reason",
-          "required": true,
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "dry-run": {
-          "description": "Show what would be sent without calling the API",
-          "name": "dry-run",
-          "allowNo": false,
-          "type": "boolean"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "federation:revoke-gateway",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "federation",
-        "revoke-gateway.js"
-      ]
-    },
-    "mandate:accept": {
-      "aliases": [],
-      "args": {
-        "id": {
+        "mandateId": {
           "description": "Mandate ID",
-          "name": "id",
+          "name": "mandateId",
           "required": true
-        }
-      },
-      "description": "Accept a proposed mandate (as performer)",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
         },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "mandate:accept",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "mandate",
-        "accept.js"
-      ]
-    },
-    "mandate:batch": {
-      "aliases": [],
-      "args": {},
-      "description": "Fetch multiple mandates by ID (up to 100). Outputs NDJSON.",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "ids": {
-          "description": "Comma-separated mandate IDs",
-          "name": "ids",
-          "required": true,
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "mandate:batch",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "mandate",
-        "batch.js"
-      ]
-    },
-    "mandate:cancel": {
-      "aliases": [],
-      "args": {
-        "id": {
-          "description": "Mandate ID",
-          "name": "id",
-          "required": true
-        }
-      },
-      "description": "Cancel a mandate",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "reason": {
-          "description": "Cancellation reason",
-          "name": "reason",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "mandate:cancel",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "mandate",
-        "cancel.js"
-      ]
-    },
-    "mandate:chain": {
-      "aliases": [],
-      "args": {
-        "id": {
-          "description": "Mandate ID",
-          "name": "id",
-          "required": true
-        }
-      },
-      "description": "Get full delegation chain for a mandate",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "mandate:chain",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "mandate",
-        "chain.js"
-      ]
-    },
-    "mandate:counter-propose": {
-      "aliases": [],
-      "args": {
-        "id": {
-          "description": "Mandate ID",
-          "name": "id",
-          "required": true
-        }
-      },
-      "description": "Counter-propose a mandate with revised terms (as performer)",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "data": {
-          "description": "Counter-proposal data as JSON string (counterCriteria, message)",
-          "name": "data",
-          "required": true,
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "mandate:counter-propose",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "mandate",
-        "counter-propose.js"
-      ]
-    },
-    "mandate:create": {
-      "aliases": [],
-      "args": {},
-      "description": "Create a new mandate",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "type": {
-          "description": "Contract type (e.g., ACH-PROC-v1)",
-          "name": "type",
-          "required": true,
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "performer": {
-          "description": "Performer agent ID",
-          "name": "performer",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "data": {
-          "description": "Mandate data as JSON string",
-          "name": "data",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "file": {
-          "description": "Read mandate data from JSON file",
-          "name": "file",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "max-submissions": {
-          "description": "Max receipt submissions allowed (1-100)",
-          "name": "max-submissions",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "activate": {
-          "description": "Auto-activate the mandate (CREATED → ACTIVE)",
-          "name": "activate",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "dry-run": {
-          "description": "Show what would be sent without hitting the API",
-          "name": "dry-run",
-          "allowNo": false,
-          "type": "boolean"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "mandate:create",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "mandate",
-        "create.js"
-      ]
-    },
-    "mandate:get": {
-      "aliases": [],
-      "args": {
-        "id": {
-          "description": "Mandate ID",
-          "name": "id",
-          "required": true
-        }
-      },
-      "description": "Get mandate details by ID",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "mandate:get",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "mandate",
-        "get.js"
-      ]
-    },
-    "mandate:list": {
-      "aliases": [],
-      "args": {},
-      "description": "List mandates with optional filters",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "status": {
-          "description": "Filter by mandate status (CREATED, ACTIVE, PROCESSING, REVISION_REQUESTED, FULFILLED, FAILED, REMEDIATED, EXPIRED, CANCELLED)",
-          "name": "status",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "type": {
-          "description": "Filter by contract type (e.g., ACH-PROC-v1)",
-          "name": "type",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "limit": {
-          "description": "Max results per page",
-          "name": "limit",
-          "default": 25,
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "cursor": {
-          "description": "Pagination cursor",
-          "name": "cursor",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "all": {
-          "description": "Stream all pages as NDJSON",
-          "name": "all",
-          "allowNo": false,
-          "type": "boolean"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "mandate:list",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "mandate",
-        "list.js"
-      ]
-    },
-    "mandate:outcome": {
-      "aliases": [],
-      "args": {
-        "id": {
-          "description": "Mandate ID",
-          "name": "id",
-          "required": true
-        }
-      },
-      "description": "Report principal verdict on a receipt (PASS or FAIL with settlement signal)",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "receipt-id": {
-          "description": "Receipt ID to judge",
-          "name": "receipt-id",
-          "required": true,
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "outcome": {
-          "description": "PASS or FAIL",
-          "name": "outcome",
-          "required": true,
-          "hasDynamicHelp": false,
-          "multiple": false,
+        "verdict": {
+          "description": "PASS to accept, FAIL to reject",
+          "name": "verdict",
           "options": [
             "PASS",
             "FAIL"
           ],
+          "required": true
+        }
+      },
+      "description": "Render a verdict on a notarized agreement (accept or reject delivery)",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
           "type": "option"
         },
         "reason": {
@@ -1833,400 +2752,6 @@
           "multiple": false,
           "type": "option"
         },
-        "signal": {
-          "description": "Settlement signal (settle, hold, escalate)",
-          "name": "signal",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "mandate:outcome",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "mandate",
-        "outcome.js"
-      ]
-    },
-    "mandate:reject": {
-      "aliases": [],
-      "args": {
-        "id": {
-          "description": "Mandate ID",
-          "name": "id",
-          "required": true
-        }
-      },
-      "description": "Reject a proposed mandate (as performer)",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "reason": {
-          "description": "Rejection reason",
-          "name": "reason",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "mandate:reject",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "mandate",
-        "reject.js"
-      ]
-    },
-    "mandate:request-revision": {
-      "aliases": [],
-      "args": {
-        "id": {
-          "description": "Mandate ID",
-          "name": "id",
-          "required": true
-        }
-      },
-      "description": "Request revision after principal rejection (rework loop)",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "reason": {
-          "description": "Reason for requesting revision",
-          "name": "reason",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "mandate:request-revision",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "mandate",
-        "request-revision.js"
-      ]
-    },
-    "mandate:transition": {
-      "aliases": [],
-      "args": {
-        "id": {
-          "description": "Mandate ID",
-          "name": "id",
-          "required": true
-        },
-        "action": {
-          "description": "Transition action",
-          "name": "action",
-          "required": true
-        }
-      },
-      "description": "Transition mandate state (register, activate, cancel)",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "reason": {
-          "description": "Transition reason",
-          "name": "reason",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "mandate:transition",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "mandate",
-        "transition.js"
-      ]
-    },
-    "receipt:get": {
-      "aliases": [],
-      "args": {
-        "mandateId": {
-          "description": "Mandate ID",
-          "name": "mandateId",
-          "required": true
-        },
-        "receiptId": {
-          "description": "Receipt ID",
-          "name": "receiptId",
-          "required": true
-        }
-      },
-      "description": "Get receipt details",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "receipt:get",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "receipt",
-        "get.js"
-      ]
-    },
-    "receipt:list": {
-      "aliases": [],
-      "args": {
-        "mandateId": {
-          "description": "Mandate ID",
-          "name": "mandateId",
-          "required": true
-        }
-      },
-      "description": "List receipts for a mandate",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "all": {
-          "description": "Stream all pages as NDJSON",
-          "name": "all",
-          "allowNo": false,
-          "type": "boolean"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "receipt:list",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "receipt",
-        "list.js"
-      ]
-    },
-    "receipt:submit": {
-      "aliases": [],
-      "args": {
-        "mandateId": {
-          "description": "Mandate ID",
-          "name": "mandateId",
-          "required": true
-        }
-      },
-      "description": "Submit a receipt (evidence of completion) for a mandate",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "data": {
-          "description": "Evidence as JSON string",
-          "name": "data",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "file": {
-          "description": "Read evidence from JSON file",
-          "name": "file",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
         "dry-run": {
           "description": "Show what would be sent without hitting the API",
           "name": "dry-run",
@@ -2236,7 +2761,7 @@
       },
       "hasDynamicHelp": false,
       "hiddenAliases": [],
-      "id": "receipt:submit",
+      "id": "verdict:render",
       "pluginAlias": "@agledger/cli",
       "pluginName": "@agledger/cli",
       "pluginType": "core",
@@ -2246,8 +2771,8 @@
       "relativePath": [
         "dist",
         "commands",
-        "receipt",
-        "submit.js"
+        "verdict",
+        "render.js"
       ]
     },
     "schema:blank-template": {
@@ -2256,7 +2781,7 @@
       "description": "Get a blank template for creating a custom contract type from scratch",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -2320,7 +2845,7 @@
       "description": "Check backward/forward compatibility of schema changes",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -2392,7 +2917,7 @@
       "description": "Deprecate a schema version",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -2462,7 +2987,7 @@
       "description": "Diff two versions of a contract type schema",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -2534,7 +3059,7 @@
       "description": "Export a contract type schema bundle to a file",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -2606,7 +3131,7 @@
       "description": "Get a specific version of a contract type schema",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -2670,7 +3195,7 @@
       "description": "Get the full JSON Schema for a contract type",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -2726,7 +3251,7 @@
       "description": "Import a schema bundle from a file",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -2754,7 +3279,7 @@
           "type": "option"
         },
         "dry-run": {
-          "description": "Preview what would be imported without persisting",
+          "description": "Preview what would be imported without persisting (server-side dry-run)",
           "name": "dry-run",
           "allowNo": false,
           "type": "boolean"
@@ -2782,7 +3307,7 @@
       "description": "List available contract type schemas",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -2808,6 +3333,27 @@
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
+        },
+        "limit": {
+          "description": "Max results per page",
+          "name": "limit",
+          "default": 50,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "cursor": {
+          "description": "Pagination cursor",
+          "name": "cursor",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "all": {
+          "description": "Stream all pages as NDJSON",
+          "name": "all",
+          "allowNo": false,
+          "type": "boolean"
         }
       },
       "hasDynamicHelp": false,
@@ -2832,7 +3378,7 @@
       "description": "Get the meta-schema for custom schema authoring",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -2896,7 +3442,7 @@
       "description": "Preview a schema before registration",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -2952,7 +3498,7 @@
       "description": "Register a new custom contract type schema",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -3014,7 +3560,7 @@
       "description": "Get verification rules for a contract type",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -3070,7 +3616,7 @@
       "description": "Get a starter template from an existing contract type",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -3139,7 +3685,7 @@
       "description": "Validate receipt evidence against a contract type schema",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -3195,7 +3741,7 @@
       "description": "List all versions of a contract type schema",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -3221,6 +3767,27 @@
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
+        },
+        "limit": {
+          "description": "Max results per page",
+          "name": "limit",
+          "default": 50,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "cursor": {
+          "description": "Pagination cursor",
+          "name": "cursor",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "all": {
+          "description": "Stream all pages as NDJSON",
+          "name": "all",
+          "allowNo": false,
+          "type": "boolean"
         }
       },
       "hasDynamicHelp": false,
@@ -3239,85 +3806,13 @@
         "versions.js"
       ]
     },
-    "verdict:render": {
-      "aliases": [],
-      "args": {
-        "mandateId": {
-          "description": "Mandate ID",
-          "name": "mandateId",
-          "required": true
-        },
-        "verdict": {
-          "description": "PASS to accept, FAIL to reject",
-          "name": "verdict",
-          "options": [
-            "PASS",
-            "FAIL"
-          ],
-          "required": true
-        }
-      },
-      "description": "Render a verdict on a notarized agreement (accept or reject delivery)",
-      "flags": {
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "description": "Suppress output (exit code only)",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "api-key": {
-          "description": "AGLedger API key",
-          "env": "AGLEDGER_API_KEY",
-          "name": "api-key",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "api-url": {
-          "description": "AGLedger API base URL",
-          "env": "AGLEDGER_API_URL",
-          "name": "api-url",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "reason": {
-          "description": "Reason for the verdict",
-          "name": "reason",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "verdict:render",
-      "pluginAlias": "@agledger/cli",
-      "pluginName": "@agledger/cli",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "verdict",
-        "render.js"
-      ]
-    },
     "webhook:create": {
       "aliases": [],
       "args": {},
       "description": "Create a webhook subscription",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -3395,7 +3890,7 @@
       "description": "Delete a webhook subscription",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -3421,6 +3916,12 @@
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
+        },
+        "dry-run": {
+          "description": "Show what would be deleted without hitting the API",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
         }
       },
       "hasDynamicHelp": false,
@@ -3445,7 +3946,7 @@
       "description": "List registered webhooks, optionally filtered by exact URL",
       "flags": {
         "json": {
-          "description": "Output as JSON",
+          "description": "Force JSON output (default when stdout is piped)",
           "name": "json",
           "allowNo": false,
           "type": "boolean"
@@ -3478,6 +3979,27 @@
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
+        },
+        "limit": {
+          "description": "Max results per page",
+          "name": "limit",
+          "default": 50,
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "cursor": {
+          "description": "Pagination cursor",
+          "name": "cursor",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "all": {
+          "description": "Stream all pages as NDJSON",
+          "name": "all",
+          "allowNo": false,
+          "type": "boolean"
         }
       },
       "hasDynamicHelp": false,
@@ -3497,5 +4019,5 @@
       ]
     }
   },
-  "version": "0.4.1"
+  "version": "0.5.1"
 }

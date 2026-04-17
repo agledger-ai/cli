@@ -1,11 +1,11 @@
 import { Args } from '@oclif/core';
-import { BaseCommand, ExitCode } from '../base.js';
+import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
 
 /** Per-command JSON schema for agent consumption (~200 tokens per command). */
 export default class HelpJson extends BaseCommand {
   static override description = 'Get JSON schema for a specific command (agent discovery)';
   static override args = {
-    command: Args.string({ description: 'Command name (e.g., "mandate create")', required: true }),
+    command: Args.string({ description: 'CLI command name (e.g., "api", "discover", "login")', required: true }),
   };
   static override flags = { ...BaseCommand.baseFlags };
 
@@ -19,10 +19,10 @@ export default class HelpJson extends BaseCommand {
       }
       const cmdId = args.command.replace(/ /g, ':');
       const cmd = plugin.commands.find(
-        (c) => c.id === cmdId || c.id === args.command.replace(/ /g, ':'),
+        (c) => c.id === cmdId || c.aliases?.includes(cmdId),
       );
       if (!cmd) {
-        this.failWith('COMMAND_NOT_FOUND', `Command "${args.command}" not found`, ExitCode.USAGE_ERROR, 'Run "agledger list-commands" to see available commands');
+        this.failWith(ErrorCode.COMMAND_NOT_FOUND, `Command "${args.command}" not found`, ExitCode.USAGE_ERROR, 'Run "agledger list-commands" to see available commands');
       }
       this.output({
         name: cmd.id.replace(/:/g, ' '),

@@ -1,8 +1,8 @@
 # @agledger/cli
 
-The official CLI for the [AGLedger](https://agledger.ai) API -- accountability and audit infrastructure for agentic systems.
+The official CLI for the [AGLedger](https://www.agledger.ai) API — accountability and audit infrastructure for agentic systems.
 
-54 commands across 10 topics. Designed for both human developers and AI agents.
+A **thin cover** over the API. The CLI passes your request straight through to the API and forwards the response — no hand-coded per-endpoint wrappers, no flag-to-body translation, no drift. Every AGLedger API route is reachable via `agledger api <METHOD> <path>`.
 
 ## Install
 
@@ -13,73 +13,104 @@ npm install -g @agledger/cli
 ## Quick Start
 
 ```bash
-# Authenticate
 export AGLEDGER_API_KEY=ach_ent_...
-export AGLEDGER_API_URL=http://localhost:3000
+export AGLEDGER_API_URL=https://your-agledger-instance
 
-# Create and activate a mandate
-agledger mandate create --type ACH-PROC-v1 --activate \
-  --data '{"enterpriseId":"...","contractVersion":"1","platform":"cli","criteria":{"item_spec":"500 units copper wire","quantity":{"target":500,"unit":"units"}}}'
+# Check health, identity, scopes, and get the quickstart workflow
+agledger discover
+
+# List contract types
+agledger api GET /v1/schemas
+
+# Create a mandate (raw JSON body)
+agledger api POST /v1/mandates --data '{
+  "contractType": "ACH-PROC-v1",
+  "criteria": { "item_spec": "500 units copper wire", "quantity": { "target": 500 } }
+}'
+
+# Or build the body with typed fields
+agledger api POST /v1/mandates \
+  -F contractType=ACH-PROC-v1 \
+  -F criteria.item_spec='500 units copper wire' \
+  -F criteria.quantity.target=500
 
 # Submit a receipt
-agledger receipt submit <mandate-id> \
-  --data '{"item_secured":"Copper wire","quantity":500,"total_cost":{"amount":1150,"currency":"USD"},"supplier":{"id":"SUP-001","name":"Acme Wire Co"},"confirmation_ref":"PO-2026-0042"}'
+agledger api POST /v1/mandates/<mandate-id>/receipts \
+  --data '{"evidence":{"items_delivered":"copper wire","quantity_delivered":500}}'
 
 # Render a verdict
-agledger mandate outcome <mandate-id> --receipt-id <receipt-id> --outcome PASS
+agledger api POST /v1/mandates/<mandate-id>/outcome \
+  -F receiptId=<receipt-id> -F outcome=PASS
 ```
 
-## Agent-Native Design
+## Why a thin cover?
 
-The CLI is designed for AI agent consumption:
+- **Zero drift.** When the API adds, renames, or removes a route, the CLI keeps working — no code change required.
+- **One mental model.** The API docs are the CLI docs. What you read in the OpenAPI spec is what you type.
+- **All 250+ routes on day one.** You get full parity, not a hand-picked subset.
 
-- **`--json`** on every command, auto-JSON when piped (non-TTY)
-- **`--quiet`** for exit-code-only operation
-- **`--dry-run`** on all mutating commands
-- **Structured errors** to stderr with `code`, `message`, `suggestion`
-- **Semantic exit codes** (0-10) for programmatic handling
-- **Three-tier discovery**: `SKILL.md` (~50 tokens) -> `list-commands --json` -> `help-json <command>`
-- **Never prompts interactively** -- fails with structured error
+## Ways to pass a body
+
+| Flag | When to use |
+|---|---|
+| `--data '{...}'` | Agent-friendly: one JSON string |
+| `--input file.json` | Complex payloads; reuse files |
+| `--input -` | Pipe JSON from stdin |
+| `-F key=value` (repeatable) | Shell-friendly; typed (`true`/`false`/`null`/numbers); nested via `a.b=v`; arrays via `arr[]=v`; JSON literals via `k={...}` / `k=[...]` |
+
+Merging order (low → high): `--data` → `--input` → `-F` → `--query`. Later sources override earlier keys.
+
+## Agent-native DX
+
+- `--json` on every command (auto when stdout is piped)
+- `--quiet` suppresses output (exit code only)
+- `--dry-run` on `agledger api` shows the request without sending
+- `--paginate` on GET follows cursor pagination and streams NDJSON
+- Structured errors on stderr: `{error: true, code, message, suggestion, ...}` — API errors pass through verbatim
+- Semantic exit codes: 0 (OK), 2 (usage), 3 (auth), 4 (forbidden), 5 (not found), 6 (conflict), 7 (rate limit), 8 (server), 9 (network), 10 (timeout)
+- `NO_COLOR` supported per [no-color.org](https://no-color.org)
 
 ## Discovery
 
 ```bash
-# List all commands (~700 tokens)
-agledger list-commands --json
-
-# Get per-command schema (~200 tokens)
-agledger help-json "mandate create" --json
+agledger list-commands --json          # 8 CLI-local commands
+agledger help-json api --json          # Schema for `api` (args + flags)
+agledger discover                       # Health + identity + quickstart
+agledger api GET /openapi.json          # Full API route catalog
 ```
 
-## Topics
+## CLI-local commands (everything else is `agledger api`)
 
-| Topic | Commands | Description |
-|-------|----------|-------------|
-| mandate | 12 | Create, activate, transition, batch, chain, counter-propose, outcome |
-| schema | 16 | Contract type CRUD, diff, import/export, compatibility checking |
-| receipt | 3 | Submit evidence, list, get |
-| webhook | 3 | Create, list, delete |
-| audit | 2 | Trail (per-mandate), events (enterprise-wide) |
-| agent | 2 | List agents, reputation history |
-| verdict | 1 | Render principal verdict |
-| federation | 6 | Gateway management, health, audit log |
-| admin | 3 | Enterprise/agent creation, config |
+| Command | Purpose |
+|---|---|
+| `api` | Call any API endpoint |
+| `discover` | Health + identity + scopes + quickstart |
+| `login` | Verify API key, store in `~/.agledger/config.json` (0600) |
+| `logout` | Remove profile(s) |
+| `auth` | Check current login state (exit 0 either way) |
+| `config` | `list` / `get` / `use <profile>` / `path` |
+| `list-commands` | Inventory (this list) |
+| `help-json` | Per-command schema |
 
 ## Authentication
 
-Set `AGLEDGER_API_KEY` environment variable or pass `--api-key` flag:
-
 ```bash
-export AGLEDGER_API_KEY=ach_ent_...   # Enterprise key
-export AGLEDGER_API_KEY=ach_age_...   # Agent key (auto-routes to agent endpoints)
+# Verifies the key against the API, stores under ~/.agledger/config.json
+agledger login --api-key ach_ent_... --profile prod
+
+# Switch profiles
+agledger config use prod
+
+# Or just use env vars per-invocation
+AGLEDGER_API_KEY=... AGLEDGER_API_URL=... agledger api GET /v1/mandates
 ```
 
-Agent keys (`ach_age_*`) automatically route mandate creation to `POST /v1/mandates/agent`.
+Agent keys (`ach_age_*`) and enterprise keys (`ach_ent_*`) are both accepted — the API routes them appropriately.
 
 ## Requirements
 
 - Node.js >= 22.0.0
-- A running [AGLedger API](https://agledger.ai) instance
+- A running [AGLedger API](https://www.agledger.ai) instance
 
 ## License
 

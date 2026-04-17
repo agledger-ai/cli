@@ -1,13 +1,15 @@
 /**
- * AGLedger CLI — Base command with dual-mode output and auth.
- * All commands extend this for consistent behavior.
+ * AGLedger CLI — Base command with dual-mode output, auth, and error forwarding.
+ * The CLI is a thin pass-through over the API — this base exists to make that
+ * pass-through consistent (same exit codes, same error shape, same output modes).
  */
 
+import { readFileSync } from 'node:fs';
 import { Command, Flags } from '@oclif/core';
 import { ApiClient } from './api-client.js';
 import type { ApiResponse } from './api-client.js';
 
-/** Semantic exit codes for agent consumption. */
+/** Semantic exit codes for agent consumption. Stable across releases. */
 export const ExitCode = {
   SUCCESS: 0,
   GENERAL_ERROR: 1,
@@ -22,9 +24,28 @@ export const ExitCode = {
   TIMEOUT: 10,
 } as const;
 
+/**
+ * Canonical CLI-origin error codes emitted in the `code` field of structured errors.
+ * Used only when the CLI itself can't forward an API error (no auth, bad JSON input,
+ * network failure). API-origin codes come through untouched from the API response body.
+ */
+export const ErrorCode = {
+  AUTH_REQUIRED: 'AUTH_REQUIRED',
+  COMMAND_NOT_FOUND: 'COMMAND_NOT_FOUND',
+  MISSING_INPUT: 'MISSING_INPUT',
+  INVALID_JSON_INPUT: 'INVALID_JSON_INPUT',
+  INVALID_PATH: 'INVALID_PATH',
+  INVALID_METHOD: 'INVALID_METHOD',
+  INVALID_FIELD: 'INVALID_FIELD',
+  FILE_READ_ERROR: 'FILE_READ_ERROR',
+  TIMEOUT: 'TIMEOUT',
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  UNKNOWN_ERROR: 'UNKNOWN_ERROR',
+} as const;
+
 export abstract class BaseCommand extends Command {
   static baseFlags = {
-    json: Flags.boolean({ description: 'Output as JSON', default: false }),
+    json: Flags.boolean({ description: 'Force JSON output (default when stdout is piped)', default: false }),
     quiet: Flags.boolean({ description: 'Suppress output (exit code only)', default: false }),
     'api-key': Flags.string({ description: 'AGLedger API key', env: 'AGLEDGER_API_KEY' }),
     'api-url': Flags.string({ description: 'AGLedger API base URL', env: 'AGLEDGER_API_URL' }),
@@ -41,29 +62,30 @@ export abstract class BaseCommand extends Command {
   protected createApiClient(flags: { 'api-key'?: string; 'api-url'?: string }): ApiClient {
     const apiKey = flags['api-key'];
     if (!apiKey) {
-      this.failWith('AUTH_REQUIRED', 'No API key. Set AGLEDGER_API_KEY, use --api-key, or run `agledger login`.', ExitCode.AUTH_ERROR);
+      this.failWith(
+        ErrorCode.AUTH_REQUIRED,
+        'No API key. Set AGLEDGER_API_KEY, use --api-key, or run `agledger login`.',
+        ExitCode.AUTH_ERROR,
+      );
     }
     return new ApiClient(flags['api-url'] || 'https://agledger.example.com', apiKey!);
   }
 
-  /** API call — passes through the full response body unchanged on success and error. */
-  protected async api(
+  /**
+   * Call the API. Path is passed through as-is — caller provides the full path
+   * (e.g. `/v1/mandates`, `/health`, `/federation/v1/register`). No auto-prefixing.
+   */
+  protected async callApi(
     flags: { 'api-key'?: string; 'api-url'?: string },
     method: string,
     path: string,
     options?: { query?: Record<string, unknown>; body?: unknown },
-  ): Promise<Record<string, unknown>> {
+  ): Promise<ApiResponse> {
     const client = this.createApiClient(flags);
-    // API routes are mounted under /v1 except /health and /federation/v1/*
-    const fullPath = path.startsWith('/health') || path.startsWith('/federation/') ? path : `/v1${path}`;
-    const response = await client.request(method, fullPath, options);
-    if (!response.ok) {
-      this.handleApiError(response);
-    }
-    return response.body as Record<string, unknown>;
+    return client.request(method, path, options);
   }
 
-  protected output(data: Record<string, unknown>): void {
+  protected output(data: unknown): void {
     if (this.isQuiet) return;
     if (this.isJson) {
       process.stdout.write(JSON.stringify(data) + '\n');
@@ -72,60 +94,58 @@ export abstract class BaseCommand extends Command {
     }
   }
 
-  protected outputPage(page: { data: unknown[]; hasMore?: boolean; cursor?: string }, columns: string[]): void {
-    if (this.isQuiet) return;
-    if (this.isJson) {
-      process.stdout.write(JSON.stringify(page) + '\n');
-    } else {
-      if (page.data.length === 0) {
-        process.stderr.write('No results.\n');
-        return;
-      }
-      const rows = page.data as Record<string, unknown>[];
-      const header = columns.join('\t');
-      process.stdout.write(header + '\n');
-      process.stdout.write(columns.map(() => '---').join('\t') + '\n');
-      for (const row of rows) {
-        process.stdout.write(columns.map((c) => String(row[c] ?? '')).join('\t') + '\n');
-      }
-      if (page.hasMore) {
-        process.stderr.write(`\n(more results available — use --all to stream all pages)\n`);
-      }
-    }
-  }
-
   protected outputNdjson(item: unknown): void {
     if (this.isQuiet) return;
     process.stdout.write(JSON.stringify(item) + '\n');
   }
 
-  /** Stream all pages as NDJSON, or return a single page for outputPage(). */
-  protected async paginate(
-    flags: { 'api-key'?: string; 'api-url'?: string },
-    path: string,
-    query: Record<string, unknown>,
-    opts: { all: boolean; columns: string[] },
-  ): Promise<void> {
-    if (opts.all) {
-      let cursor: string | undefined;
-      let prevCursor: string | undefined;
-      do {
-        if (cursor) query.cursor = cursor;
-        const page = await this.api(flags, 'GET', path, { query });
-        const items = (page.data ?? []) as unknown[];
-        for (const item of items) {
-          this.outputNdjson(item);
-        }
-        if (page.hasMore === false || items.length === 0) break;
-        const nextCursor = (page.nextCursor ?? page.cursor) as string | undefined;
-        if (nextCursor === prevCursor || nextCursor === cursor) break; // stale cursor guard
-        prevCursor = cursor;
-        cursor = nextCursor;
-      } while (cursor);
-    } else {
-      const page = await this.api(flags, 'GET', path, { query });
-      this.outputPage(page as { data: unknown[] }, opts.columns);
+  /**
+   * Show a dry-run payload. Suppressed under --quiet. Writes header to stderr, payload to stdout.
+   * `label` describes the action concretely so agents can log what would have happened.
+   */
+  protected dryRunOutput(payload: unknown, label: string): void {
+    if (this.isQuiet) return;
+    if (!this.isJson) {
+      process.stderr.write(`Dry run — ${label}:\n`);
     }
+    this.output(payload);
+  }
+
+  /** Parse JSON with structured error on failure. Use for any user-supplied JSON input. */
+  protected parseJsonInput(source: string, fieldName: string): unknown {
+    try {
+      return JSON.parse(source);
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith('EEXIT:')) throw err;
+      this.failWith(
+        ErrorCode.INVALID_JSON_INPUT,
+        `${fieldName} is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+        ExitCode.USAGE_ERROR,
+        'Check that the JSON is properly quoted. For complex payloads, use --input <file> instead of --data.',
+      );
+      throw new Error('unreachable');
+    }
+  }
+
+  /** Read and parse a JSON file with structured errors. `-` reads from stdin. */
+  protected readJsonSource(path: string, fieldName: string): unknown {
+    let content: string;
+    try {
+      if (path === '-') {
+        content = readFileSync(0, 'utf-8');
+      } else {
+        content = readFileSync(path, 'utf-8');
+      }
+    } catch (err) {
+      this.failWith(
+        ErrorCode.FILE_READ_ERROR,
+        `Cannot read ${fieldName} at ${path === '-' ? 'stdin' : path}: ${err instanceof Error ? err.message : String(err)}`,
+        ExitCode.USAGE_ERROR,
+        'Check that the path exists and is readable, or pipe JSON to stdin with --input -.',
+      );
+      throw new Error('unreachable');
+    }
+    return this.parseJsonInput(content, path === '-' ? 'stdin' : `${fieldName} ${path}`);
   }
 
   protected failWith(code: string, message: string, exitCode: number, suggestion?: string): never {
@@ -136,13 +156,14 @@ export abstract class BaseCommand extends Command {
     throw new Error('unreachable');
   }
 
-  /** Forward the full API error body to stderr — enriches with recovery suggestion if missing. */
+  /**
+   * Forward the full API error body to stderr verbatim. The API owns error
+   * guidance (code, message, suggestion, validationErrors, nextSteps); the CLI
+   * does not enrich, translate, or inject fields the API didn't return.
+   */
   protected handleApiError(response: ApiResponse): never {
     const body = (response.body ?? {}) as Record<string, unknown>;
     const exitCode = this.statusToExitCode(response.status);
-    if (!body.suggestion) {
-      body.suggestion = this.recoveryHint(response.status);
-    }
     const error: Record<string, unknown> = { error: true, ...body };
     process.stderr.write(JSON.stringify(error) + '\n');
     this.exit(exitCode);
@@ -150,30 +171,29 @@ export abstract class BaseCommand extends Command {
   }
 
   protected handleError(err: unknown): never {
-    // Re-throw oclif exit errors — already handled by handleApiError/failWith
     if (err instanceof Error && err.message.startsWith('EEXIT:')) throw err;
     if (err instanceof DOMException && err.name === 'AbortError') {
-      this.failWith('TIMEOUT', 'Request timed out.', ExitCode.TIMEOUT,
-        'Retry the same command. If it persists, run "agledger status" to check API connectivity.');
+      this.failWith(
+        ErrorCode.TIMEOUT,
+        'Request timed out.',
+        ExitCode.TIMEOUT,
+        'Retry the same command. If it persists, run `agledger discover` to check API connectivity.',
+      );
     }
     if (err instanceof TypeError && String(err.message).includes('fetch')) {
-      this.failWith('NETWORK_ERROR', String(err.message), ExitCode.NETWORK_ERROR,
-        'Check that AGLEDGER_API_URL is correct. Run "agledger status" to verify connectivity.');
+      this.failWith(
+        ErrorCode.NETWORK_ERROR,
+        String(err.message),
+        ExitCode.NETWORK_ERROR,
+        'Check that AGLEDGER_API_URL is correct. Run `agledger discover` to verify connectivity.',
+      );
     }
-    this.failWith('UNKNOWN_ERROR', err instanceof Error ? err.message : String(err), ExitCode.GENERAL_ERROR,
-      'Run "agledger list-commands" to see available commands.');
-  }
-
-  private recoveryHint(status: number): string {
-    if (status === 400) return 'Check required fields. Run "agledger schema list" to see valid contract types, or "agledger schema get <type>" for the exact schema.';
-    if (status === 401) return 'API key is invalid or expired. Set AGLEDGER_API_KEY or use --api-key.';
-    if (status === 403) return 'Your API key lacks the required scope. Check the missingScopes field above.';
-    if (status === 404) return 'Resource not found. Run "agledger list-commands" to verify the command, or check the resource ID.';
-    if (status === 409) return 'Conflict — the resource state does not allow this action. Run "agledger mandate get <id>" to check current status.';
-    if (status === 422) return 'Validation failed. Check the validationErrors field above. Run "agledger schema get <type>" for the expected format.';
-    if (status === 429) return 'Rate limited. Wait a moment, then retry the same command.';
-    if (status >= 500) return 'Server error. Retry the same command. If it persists, run "agledger status" to check API health.';
-    return 'Run "agledger list-commands" to see available commands.';
+    this.failWith(
+      ErrorCode.UNKNOWN_ERROR,
+      err instanceof Error ? err.message : String(err),
+      ExitCode.GENERAL_ERROR,
+      'Run `agledger api --help` to see usage.',
+    );
   }
 
   private statusToExitCode(status: number): number {

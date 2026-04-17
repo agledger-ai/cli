@@ -1,11 +1,15 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { Flags } from '@oclif/core';
-import { BaseCommand, ExitCode } from '../base.js';
+import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
+import { readConfig, writeConfig } from '../util/config.js';
 
+/**
+ * Verify the provided key against the API, then persist it to ~/.agledger/config.json
+ * (0600, dir 0700). Supports named profiles so one machine can hold keys for multiple
+ * instances/environments.
+ */
 export default class Login extends BaseCommand {
-  static override description = 'Authenticate and store credentials in ~/.agledger/';
+  static override description = 'Verify an API key and store it in ~/.agledger/config.json (0600)';
+
   static override flags = {
     ...BaseCommand.baseFlags,
     profile: Flags.string({ description: 'Profile name', default: 'default' }),
@@ -15,20 +19,24 @@ export default class Login extends BaseCommand {
     const { flags } = await this.parse(Login);
     const apiKey = flags['api-key'];
     if (!apiKey) {
-      this.failWith('AUTH_REQUIRED', 'Provide --api-key or set AGLEDGER_API_KEY.', ExitCode.AUTH_ERROR);
+      this.failWith(
+        ErrorCode.AUTH_REQUIRED,
+        'Provide --api-key or set AGLEDGER_API_KEY.',
+        ExitCode.AUTH_ERROR,
+      );
     }
     try {
-      const me = await this.api(flags, 'GET', '/auth/me');
+      const response = await this.callApi(flags, 'GET', '/v1/auth/me');
+      if (!response.ok) {
+        this.handleApiError(response);
+      }
 
-      const configDir = join(homedir(), '.agledger');
-      if (!existsSync(configDir)) mkdirSync(configDir, { recursive: true });
-      const configPath = join(configDir, 'config.json');
-      const config = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf-8')) : { profiles: {} };
+      const config = readConfig();
       config.profiles[flags.profile] = { apiKey: apiKey!, apiUrl: flags['api-url'] || undefined };
       config.activeProfile = flags.profile;
-      writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+      writeConfig(config);
 
-      this.output({ authenticated: true, profile: flags.profile, account: me });
+      this.output({ authenticated: true, profile: flags.profile, account: response.body });
     } catch (err) {
       this.handleError(err);
     }
