@@ -73,7 +73,7 @@ Merging order (low → high): `--data` → `--input` → `-F` → `--query`. Lat
 ## Discovery
 
 ```bash
-agledger list-commands --json          # 8 CLI-local commands
+agledger list-commands --json          # 9 CLI-local commands
 agledger help-json api --json          # Schema for `api` (args + flags)
 agledger discover                       # Health + identity + quickstart
 agledger api GET /openapi.json          # Full API route catalog
@@ -89,6 +89,7 @@ agledger api GET /openapi.json          # Full API route catalog
 | `logout` | Remove profile(s) |
 | `auth` | Check current login state (exit 0 either way) |
 | `config` | `list` / `get` / `use <profile>` / `path` |
+| `verify` | Offline audit export verification (hash chain + Ed25519, no network) |
 | `list-commands` | Inventory (this list) |
 | `help-json` | Per-command schema |
 

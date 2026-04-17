@@ -22,6 +22,7 @@ export default class ListCommands extends BaseCommand {
       { name: 'logout', description: 'Remove a stored profile.' },
       { name: 'auth', description: 'Check current authentication status (exit 0 whether logged in or not).' },
       { name: 'config', description: 'Inspect or switch between stored profiles (list, get, use, path).' },
+      { name: 'verify', description: 'Verify an audit export offline (hash chain + Ed25519 signatures).' },
       { name: 'list-commands', description: 'List all CLI commands (this).' },
       { name: 'help-json', description: 'Get JSON schema for a specific CLI command.' },
     ];

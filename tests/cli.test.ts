@@ -2,7 +2,7 @@
  * AGLedger CLI v0.5.0 — Thin-cover integration tests.
  *
  * The CLI is a pass-through over the API. These tests validate:
- *  - Surface: list-commands + help-json report the 8 CLI-local commands
+ *  - Surface: list-commands + help-json report the 9 CLI-local commands
  *  - `agledger api`: method/path validation, --data/--input/-F/--query merging,
  *    --dry-run, --paginate, auth enforcement, error passthrough
  *  - `discover`, `login`, `auth`, `logout`, `config`: CLI-local behaviors
@@ -62,15 +62,15 @@ const isolatedHome = (): string => mkdtempSync(join(tmpdir(), 'cli-home-'));
 // Discovery — the whole CLI surface
 // ---------------------------------------------------------------------------
 describe('command surface', () => {
-  it('list-commands returns 8 CLI-local commands', () => {
+  it('list-commands returns 9 CLI-local commands', () => {
     const result = run('list-commands --json');
     expect(result.exitCode).toBe(0);
     const parsed = JSON.parse(result.stdout);
     expect(parsed.commands).toBeInstanceOf(Array);
-    expect(parsed.commands).toHaveLength(8);
+    expect(parsed.commands).toHaveLength(9);
     const names = parsed.commands.map((c: { name: string }) => c.name);
     expect(names).toEqual(
-      expect.arrayContaining(['api', 'discover', 'login', 'logout', 'auth', 'config', 'list-commands', 'help-json']),
+      expect.arrayContaining(['api', 'discover', 'login', 'logout', 'auth', 'config', 'verify', 'list-commands', 'help-json']),
     );
     expect(parsed.note).toContain('agledger api');
   });
@@ -472,5 +472,58 @@ describe('error output format', () => {
     expect(parsed.error).toBe(true);
     expect(parsed.code).toBe('AUTH_REQUIRED');
     expect(parsed.message).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// verify — offline audit-export verification (no network, no API key required)
+// ---------------------------------------------------------------------------
+describe('verify command', () => {
+  const VECTORS = resolve(import.meta.dirname, '../../../testdata/verifier');
+
+  it('exits 0 on a valid export', () => {
+    const result = run(`verify ${VECTORS}/valid-export.json --json`);
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.valid).toBe(true);
+    expect(parsed.verifiedEntries).toBe(3);
+    expect(parsed.totalEntries).toBe(3);
+    expect(parsed.brokenAt).toBeUndefined();
+  });
+
+  it('exits 1 on tampered payload and surfaces brokenAt', () => {
+    const result = run(`verify ${VECTORS}/tampered-payload.json --json`);
+    expect(result.exitCode).toBe(1);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.valid).toBe(false);
+    expect(parsed.brokenAt.position).toBe(2);
+    expect(parsed.brokenAt.reason).toBe('payload_hash_mismatch');
+  });
+
+  it('exits 1 on broken chain', () => {
+    const result = run(`verify ${VECTORS}/broken-chain.json --json`);
+    expect(result.exitCode).toBe(1);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.brokenAt.reason).toBe('chain_break');
+  });
+
+  it('requires no API key (runs fully offline)', () => {
+    const result = run(`verify ${VECTORS}/valid-export.json --json`, {
+      AGLEDGER_API_KEY: '',
+      AGLEDGER_API_URL: '',
+    });
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('accepts --keys override', () => {
+    const result = run(
+      `verify ${VECTORS}/valid-export.json --keys ${VECTORS}/public-keys.json --json`,
+    );
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('usage error exit 2 on missing file arg', () => {
+    const result = run('verify --json');
+    expect(result.exitCode).toBe(2);
   });
 });

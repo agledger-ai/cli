@@ -27,9 +27,22 @@ agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value ...]
 - `-F key=value` — repeatable; types parsed (`true`/`false`/`null`/numbers); nested via `a.b=v`; arrays via `arr[]=v`
 
 ## Discovery commands
-- `agledger list-commands --json` — full CLI inventory (8 commands)
+- `agledger list-commands --json` — full CLI inventory (9 commands)
 - `agledger help-json <command> --json` — per-command schema with args and flags
 - `agledger api GET /openapi.json` — full API route catalog
+
+## Offline audit verification
+- `agledger verify <audit-export.json>` — verify a mandate audit export offline (RFC 8785 hash chain + Ed25519). No network, no API key. Exit 0 if valid, 1 if broken; `--json` for structured output; `--keys <file>` overrides embedded keys; `--require-key-id <id>` for high-assurance flows.
+
+**What verification proves:**
+- Every entry was signed by a key listed in the export (or supplied via `--keys`) at the moment the vault wrote it.
+- Payloads have not been altered since signing (SHA-256 recomputation matches stored `payloadHash`).
+- The hash chain is contiguous — no entries were inserted, removed, or reordered between positions.
+
+**What verification does NOT prove:**
+- That the signing key is *legitimate* — verify the key against `/.well-known/agledger-vault-keys.json` on the issuing instance (or the `/v1/verification-keys` API) out-of-band.
+- That the export is *complete* — a vault operator can still truncate the export at either end.
+- That the *content* the payload describes actually happened. Payloads record what the agent reported (declared intent); the verifier does not cross-check against external systems.
 
 ## Agent-native patterns
 - `--json` on every command (auto when piped)
