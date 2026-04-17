@@ -1,18 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { Args, Flags } from '@oclif/core';
-import { verifyExport, type VerifyExportResult } from '@agledger/sdk/verify';
-import type { MandateAuditExport } from '@agledger/sdk/types';
+import { verifyExport, type VerifyExportResult, type MandateAuditExport } from '../verify/verify-export.js';
 import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
 
 /**
- * Offline verification of a mandate audit export.
- *
- * Intentionally an exception to the CLI's "thin API pass-through" principle:
- * verification is client-side crypto, not an API wrapper. Runs entirely
- * offline — no network calls, no API key required.
- *
- * Uses the shared verifier from `@agledger/sdk/verify` so the CLI and SDK
- * can never drift in canonicalization/signature semantics.
+ * Offline verification of a mandate audit export. Runs entirely offline — no
+ * network calls, no API key required. Keeps the CLI free of any @agledger/sdk
+ * dependency by duplicating the verifier from the TS SDK; parity with the SDK
+ * and Python port is enforced via shared test vectors under testdata/verifier/.
  */
 export default class Verify extends BaseCommand {
   static override description =

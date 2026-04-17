@@ -1,6 +1,6 @@
 {
   "name": "@agledger/cli",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "AGLedger CLI — Developer and agent interface for AGLedger",
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
@@ -23,7 +23,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@agledger/sdk": "0.5.1",
     "@oclif/core": "^4.9.0"
   },
   "devDependencies": {
