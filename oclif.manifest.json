@@ -1,0 +1,591 @@
+{
+  "commands": {
+    "api": {
+      "aliases": [],
+      "args": {
+        "method": {
+          "description": "HTTP method (GET, POST, PUT, PATCH, DELETE)",
+          "name": "method",
+          "required": true
+        },
+        "path": {
+          "description": "Full API path including version prefix (e.g. /v1/records, /health, /federation/v1/register)",
+          "name": "path",
+          "required": true
+        }
+      },
+      "description": "Call any AGLedger API endpoint. Pass-through with zero flag translation — use the exact path and body shape documented in the API (see `agledger discover` or GET /openapi.json).",
+      "examples": [
+        "agledger api GET /health",
+        "agledger api GET /v1/records -F status=ACTIVE -F limit=50",
+        "agledger api POST /v1/records --data '{\"type\":\"ACH-PROC-v1\",\"criteria\":{\"item_spec\":\"...\"}}'",
+        "agledger api POST /v1/records -F type=ACH-PROC-v1 -F criteria.item_spec=widgets -F criteria.quantity.target=500",
+        "agledger api POST /v1/records --input payload.json",
+        "cat payload.json | agledger api POST /v1/records --input -",
+        "agledger api GET /v1/records --paginate  # streams all pages as NDJSON"
+      ],
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "data": {
+          "description": "Request body as a JSON string. For GET/DELETE, used as query parameters.",
+          "name": "data",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "input": {
+          "description": "Read body JSON from file (or \"-\" for stdin). Shape matches --data.",
+          "name": "input",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "field": {
+          "char": "F",
+          "description": "Set a field as key=value. Values are typed: true/false/null, numbers, or JSON for {...}/[...]. Supports nested (a.b.c=v) and array append (arr[]=v). Repeatable.",
+          "name": "field",
+          "hasDynamicHelp": false,
+          "multiple": true,
+          "type": "option"
+        },
+        "query": {
+          "description": "Extra query parameters as JSON. Merges over -F fields and --data for GET/DELETE routing.",
+          "name": "query",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "paginate": {
+          "description": "Follow cursor pagination, stream all results as NDJSON. Requires GET on a paginated route.",
+          "name": "paginate",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "dry-run": {
+          "description": "Show the request that would be sent without calling the API.",
+          "name": "dry-run",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "api",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "api.js"
+      ]
+    },
+    "auth": {
+      "aliases": [],
+      "args": {},
+      "description": "Check current authentication status. Returns `authenticated: false` when no key is configured (exit 0).",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "auth",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "auth.js"
+      ]
+    },
+    "config": {
+      "aliases": [],
+      "args": {
+        "action": {
+          "description": "Action: list, get, use, path",
+          "name": "action",
+          "options": [
+            "list",
+            "get",
+            "use",
+            "path"
+          ],
+          "required": true
+        },
+        "profile": {
+          "description": "Profile name (for `use`)",
+          "name": "profile"
+        }
+      },
+      "description": "Inspect or switch between stored profiles in ~/.agledger/config.json",
+      "examples": [
+        "agledger config list                # list all profiles",
+        "agledger config get                  # show active profile",
+        "agledger config get --profile prod   # show a specific profile",
+        "agledger config use prod             # set prod as the active profile",
+        "agledger config path                 # print the config file path"
+      ],
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "profile": {
+          "description": "Profile name to inspect (for `get`)",
+          "name": "profile",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "config",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "config.js"
+      ]
+    },
+    "discover": {
+      "aliases": [],
+      "args": {},
+      "description": "Check API health and current identity, and return the quickstart workflow. Call this first.",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "discover",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "discover.js"
+      ]
+    },
+    "help-json": {
+      "aliases": [],
+      "args": {
+        "command": {
+          "description": "CLI command name (e.g., \"api\", \"discover\", \"login\")",
+          "name": "command",
+          "required": true
+        }
+      },
+      "description": "Get JSON schema for a specific command (agent discovery)",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "help-json",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "help-json.js"
+      ]
+    },
+    "list-commands": {
+      "aliases": [],
+      "args": {},
+      "description": "List all CLI commands (for agent discovery). Most API work goes through `agledger api`.",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "list-commands",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "list-commands.js"
+      ]
+    },
+    "login": {
+      "aliases": [],
+      "args": {},
+      "description": "Verify an API key and store it in ~/.agledger/config.json (0600)",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "profile": {
+          "description": "Profile name",
+          "name": "profile",
+          "default": "default",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "login",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "login.js"
+      ]
+    },
+    "logout": {
+      "aliases": [],
+      "args": {},
+      "description": "Remove a stored profile from ~/.agledger/config.json",
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "profile": {
+          "description": "Profile name to remove",
+          "name": "profile",
+          "default": "default",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "all": {
+          "description": "Remove all profiles",
+          "name": "all",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "logout",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "logout.js"
+      ]
+    },
+    "verify": {
+      "aliases": [],
+      "args": {
+        "file": {
+          "description": "Path to the audit export JSON file (or \"-\" for stdin).",
+          "name": "file",
+          "required": true
+        }
+      },
+      "description": "Verify a record audit export offline (hash chain + Ed25519 signatures, RFC 8785).",
+      "examples": [
+        "<%= config.bin %> verify audit-export.json",
+        "<%= config.bin %> verify audit-export.json --keys vault-keys.json",
+        "<%= config.bin %> verify audit-export.json --json",
+        "cat audit-export.json | <%= config.bin %> verify -"
+      ],
+      "flags": {
+        "json": {
+          "description": "Force JSON output (default when stdout is piped)",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "description": "Suppress output (exit code only)",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "api-key": {
+          "description": "AGLedger API key",
+          "env": "AGLEDGER_API_KEY",
+          "name": "api-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "api-url": {
+          "description": "AGLedger API base URL",
+          "env": "AGLEDGER_API_URL",
+          "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "keys": {
+          "description": "Path to a JSON file mapping signingKeyId → SPKI DER base64 public key. Merged over any keys embedded in the export.",
+          "name": "keys",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "require-key-id": {
+          "description": "Require every entry to reference this keyId. Rejects otherwise-valid exports signed by a retired or unexpected key.",
+          "name": "require-key-id",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "verify",
+      "pluginAlias": "@agledger/cli",
+      "pluginName": "@agledger/cli",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "verify.js"
+      ]
+    }
+  },
+  "version": "0.7.2"
+}

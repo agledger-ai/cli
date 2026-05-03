@@ -1,0 +1,50 @@
+{
+  "name": "@agledger/cli",
+  "version": "0.7.2",
+  "description": "AGLedger CLI — Developer and agent interface for AGLedger",
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "module",
+  "bin": {
+    "agledger": "./bin/run.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "LICENSE",
+    "SKILL.md",
+    "oclif.manifest.json"
+  ],
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "lint": "tsc --noEmit",
+    "postbuild": "oclif manifest",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@oclif/core": "^4.9.0"
+  },
+  "devDependencies": {
+    "oclif": "^4.23.0"
+  },
+  "oclif": {
+    "bin": "agledger",
+    "commands": {
+      "strategy": "pattern",
+      "target": "./dist/commands"
+    },
+    "topicSeparator": " "
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agledger-ai/agledger-agents",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://agledger.ai",
+  "author": "AGLedger LLC",
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
