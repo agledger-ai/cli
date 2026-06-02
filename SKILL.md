@@ -1,0 +1,60 @@
+# AGLedger CLI
+
+Thin cover over the AGLedger API. The CLI passes your call through to the API and forwards the response — no flag-to-body translation, no drift.
+
+## Setup
+Requires: `AGLEDGER_API_KEY` env var or `--api-key` flag. Optional: `AGLEDGER_API_URL`.
+
+## Primary command: `agledger api`
+Call any API endpoint:
+
+```
+agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value ...]
+```
+
+## Workflow (start here)
+1. `agledger discover` — health, identity, scopes, quickstart steps.
+2. `agledger api GET /v1/schemas` — list Record types.
+3. `agledger api GET /v1/schemas/{type}` — required fields + examples.
+4. `agledger api POST /v1/records --data '{"type":"...","criteria":{...}}'` — create a record.
+5. `agledger api POST /v1/records/{id}/completions --data '{"evidence":{...}}'` — submit completion when done.
+6. Every API response includes `nextSteps` — follow them.
+
+## Ways to pass a body
+- `--data '{"k":"v"}'` — raw JSON string (agent-friendly)
+- `--input file.json` — read JSON from file
+- `--input -` — read JSON from stdin
+- `-F key=value` — repeatable; types parsed (`true`/`false`/`null`/numbers); nested via `a.b=v`; arrays via `arr[]=v`
+
+## Discovery commands
+- `agledger list-commands --json` — full CLI inventory (9 commands)
+- `agledger help-json <command> --json` — per-command schema with args and flags
+- `agledger api GET /openapi.json` — full API route catalog
+
+## Offline audit verification
+- `agledger verify <audit-export.json>` — verify a record audit export offline (COSE_Sign1 envelopes per RFC 9052, hash chain + Ed25519 signatures). No network, no API key. Exit 0 if valid, 1 if broken; `--json` for structured output; `--keys <file>` supplies keys out of band (merged over any embedded in the export); `--require-key-id <id>` rejects exports signed by an unexpected key; `--require-out-of-band-keys` refuses the export's own embedded keys for an independent audit.
+
+**What verification proves:**
+- Every entry was signed by a key listed in the export (or supplied via `--keys`) at the moment the vault wrote it.
+- Payloads have not been altered since signing (SHA-256 recomputation matches the stored `payload_hash` over the signed COSE_Sign1 bytes).
+- The hash chain is contiguous — no entries were inserted, removed, or reordered between positions.
+- On failure, `brokenAt.code` is a canonical SCREAMING_SNAKE failure code (e.g. `CHAIN_HASH_MISMATCH`, `CHAIN_SIGNATURE_INVALID`).
+
+**What verification does NOT prove:**
+- That the signing key is *legitimate* — obtain the key out of band from `/.well-known/scitt-keys` on the issuing instance (or the `/v1/verification-keys` API) and pass it via `--keys --require-out-of-band-keys`.
+- That the export is *complete* — a vault operator can still truncate the export at either end.
+- That the *content* the payload describes actually happened. Payloads record what the agent notarized (declared intent and reported result); the verifier checks tamper-evidence, not whether the work occurred.
+
+## Agent-native patterns
+- `--json` on every command (auto when piped)
+- `--quiet` for exit-code-only operation
+- `--dry-run` on `agledger api` shows the request without sending
+- `--paginate` on GET follows cursors, streams NDJSON
+- Structured errors on stderr: `{code, message, suggestion, ...}`
+- Semantic exit codes (0-10)
+
+## Credentials
+- `agledger login --api-key <key> [--profile NAME]` — verifies key, stores in `~/.agledger/config.json` (0600)
+- `agledger logout [--profile NAME | --all]`
+- `agledger config list | get | use <profile> | path`
+- `agledger auth` — check login state (exit 0 whether logged in or not)
