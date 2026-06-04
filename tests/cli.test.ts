@@ -487,7 +487,7 @@ describe('error output format', () => {
 // verify — offline audit-export verification (no network, no API key required)
 // ---------------------------------------------------------------------------
 describe('verify command', () => {
-  const VECTORS = resolve(import.meta.dirname, '../../../testdata/conformance/export');
+  const VECTORS = resolve(import.meta.dirname, '../testdata/conformance/export');
 
   it('exits 0 on a valid export', () => {
     const result = run(`verify ${VECTORS}/valid.json --json`);
