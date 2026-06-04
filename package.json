@@ -23,15 +23,19 @@
     "lint": "tsc --noEmit",
     "pretest": "npm run build",
     "test": "vitest run",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "lint:pkg": "publint --strict && attw --pack . --ignore-rules cjs-resolves-to-esm no-resolution",
+    "prepublishOnly": "npm run build && npm run lint:pkg"
   },
   "dependencies": {
     "@agledger/verify-core": "^0.1.3",
     "@oclif/core": "^4.9.0"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.3",
     "@types/node": "^24.0.0",
     "oclif": "^4.23.0",
+    "publint": "^0.3.21",
     "typescript": "^6.0.0",
     "vitest": "^4.1.0"
   },
