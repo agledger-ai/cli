@@ -1,6 +1,6 @@
 {
   "name": "@agledger/cli",
-  "version": "0.8.8",
+  "version": "0.8.9",
   "description": "AGLedger CLI — Developer and agent interface for AGLedger",
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
