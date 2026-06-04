@@ -53,6 +53,13 @@
           "multiple": false,
           "type": "option"
         },
+        "profile": {
+          "description": "Stored profile to use for credentials (falls back to the active profile)",
+          "name": "profile",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
         "data": {
           "description": "Request body as a JSON string. For GET/DELETE, used as query parameters.",
           "name": "data",
@@ -139,6 +146,13 @@
           "description": "AGLedger API base URL",
           "env": "AGLEDGER_API_URL",
           "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "profile": {
+          "description": "Stored profile to use for credentials (falls back to the active profile)",
+          "name": "profile",
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
@@ -270,6 +284,13 @@
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
+        },
+        "profile": {
+          "description": "Stored profile to use for credentials (falls back to the active profile)",
+          "name": "profile",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
         }
       },
       "hasDynamicHelp": false,
@@ -321,6 +342,13 @@
           "description": "AGLedger API base URL",
           "env": "AGLEDGER_API_URL",
           "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "profile": {
+          "description": "Stored profile to use for credentials (falls back to the active profile)",
+          "name": "profile",
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
@@ -385,6 +413,13 @@
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
+        },
+        "profile": {
+          "description": "Stored profile to use for credentials (falls back to the active profile)",
+          "name": "profile",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
         }
       },
       "hasDynamicHelp": false,
@@ -431,6 +466,13 @@
           "description": "AGLedger API base URL",
           "env": "AGLEDGER_API_URL",
           "name": "api-url",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "profile": {
+          "description": "Stored profile to use for credentials (falls back to the active profile)",
+          "name": "profile",
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
@@ -616,6 +658,13 @@
           "multiple": false,
           "type": "option"
         },
+        "profile": {
+          "description": "Stored profile to use for credentials (falls back to the active profile)",
+          "name": "profile",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
         "keys": {
           "description": "Path to a JSON file holding out-of-band public keys. Accepts a {keyId: SPKI-DER-base64} map, a [{keyId, publicKey, ...}] list, or the raw GET /v1/verification-keys response envelope ({data:[...], ...}, the .data array is unwrapped automatically). Merged over any keys embedded in the export.",
           "name": "keys",
@@ -653,5 +702,5 @@
       ]
     }
   },
-  "version": "0.8.9"
+  "version": "0.8.10"
 }

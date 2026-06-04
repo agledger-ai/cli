@@ -17,10 +17,7 @@ const ROOT = join(import.meta.dirname, '..');
 const SOURCE_DIRS = ['src'];
 
 /** Files where emoji/symbols are legitimate (CLI terminal output, parsers). */
-const EMOJI_ALLOWLIST = new Set([
-  'src/util/diff-formatter.ts',
-  'src/util/validation-formatter.ts',
-]);
+const EMOJI_ALLOWLIST = new Set<string>([]);
 
 /** Collect all source files recursively. */
 function collectFiles(dir: string, exts: string[]): string[] {

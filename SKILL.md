@@ -3,7 +3,7 @@
 Thin cover over the AGLedger API. The CLI passes your call through to the API and forwards the response — no flag-to-body translation, no drift.
 
 ## Setup
-Requires: `AGLEDGER_API_KEY` env var or `--api-key` flag. Optional: `AGLEDGER_API_URL`.
+Credentials resolve per command with this precedence: `--api-key` flag > `AGLEDGER_API_KEY` env > stored profile (after `agledger login`). API URL: `--api-url` flag > `AGLEDGER_API_URL` env > stored profile URL > default. Optional: `AGLEDGER_API_URL`.
 
 ## Primary command: `agledger api`
 Call any API endpoint:
@@ -27,7 +27,7 @@ agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value ...]
 - `-F key=value` — repeatable; types parsed (`true`/`false`/`null`/numbers); nested via `a.b=v`; arrays via `arr[]=v`
 
 ## Discovery commands
-- `agledger list-commands --json` — full CLI inventory (9 commands)
+- `agledger list-commands --json` — full CLI inventory (10 commands)
 - `agledger help-json <command> --json` — per-command schema with args and flags
 - `agledger api GET /openapi.json` — full API route catalog
 
@@ -54,7 +54,8 @@ agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value ...]
 - Semantic exit codes (0-10)
 
 ## Credentials
-- `agledger login --api-key <key> [--profile NAME]` — verifies key, stores in `~/.agledger/config.json` (0600)
+- `agledger login --api-key <key> [--profile NAME]` — verifies key, stores in `~/.agledger/config.json` (0600). After login, plain `agledger api ...` calls authenticate from the stored profile (no flag/env needed).
+- `agledger config use <profile>` — set the active profile; `agledger api ... --profile NAME` uses a specific one per-invocation.
 - `agledger logout [--profile NAME | --all]`
 - `agledger config list | get | use <profile> | path`
 - `agledger auth` — check login state (exit 0 whether logged in or not)

@@ -1,5 +1,5 @@
 /**
- * AGLedger CLI v0.5.0 — Thin-cover integration tests.
+ * AGLedger CLI — Thin-cover integration tests.
  *
  * The CLI is a pass-through over the API. These tests validate:
  *  - Surface: list-commands + help-json report the 10 CLI-local commands
@@ -418,6 +418,79 @@ describe('login + logout + config', () => {
     const parsed = JSON.parse(result.stdout);
     expect(parsed.loggedOut).toBe(true);
     expect(parsed.removedProfiles).toEqual([]);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('resolves auth from a stored profile when no --api-key flag/env is set', () => {
+    const home = isolatedHome();
+    const configDir = join(home, '.agledger');
+    mkdirSync(configDir, { recursive: true, mode: 0o700 });
+    writeFileSync(
+      join(configDir, 'config.json'),
+      JSON.stringify({
+        profiles: { default: { apiKey: 'agl_adm_fromprofile', apiUrl: 'https://stored.example' } },
+        activeProfile: 'default',
+      }),
+      { flag: 'w', mode: 0o600 },
+    );
+
+    // No --api-key flag, and the env keys are blanked by `run`. The call must
+    // still resolve credentials from the active stored profile.
+    const result = run('api GET /v1/records --dry-run --json', { HOME: home });
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.auth.source).toBe('profile');
+    expect(parsed.auth.profile).toBe('default');
+    expect(parsed.auth.apiUrl).toBe('https://stored.example');
+    expect(parsed.auth.apiKey).toBe('****file'); // masked: last 4 chars of agl_adm_fromprofile
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('--profile selects a specific stored profile for credentials', () => {
+    const home = isolatedHome();
+    const configDir = join(home, '.agledger');
+    mkdirSync(configDir, { recursive: true, mode: 0o700 });
+    writeFileSync(
+      join(configDir, 'config.json'),
+      JSON.stringify({
+        profiles: {
+          default: { apiKey: 'agl_adm_defaultkey', apiUrl: 'https://default.example' },
+          prod: { apiKey: 'agl_adm_prodkey', apiUrl: 'https://prod.example' },
+        },
+        activeProfile: 'default',
+      }),
+      { flag: 'w', mode: 0o600 },
+    );
+
+    const result = run('api GET /v1/records --profile prod --dry-run --json', { HOME: home });
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.auth.profile).toBe('prod');
+    expect(parsed.auth.apiUrl).toBe('https://prod.example');
+    expect(parsed.auth.apiKey).toBe('****dkey');
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('--api-key flag outranks a stored profile', () => {
+    const home = isolatedHome();
+    const configDir = join(home, '.agledger');
+    mkdirSync(configDir, { recursive: true, mode: 0o700 });
+    writeFileSync(
+      join(configDir, 'config.json'),
+      JSON.stringify({
+        profiles: { default: { apiKey: 'agl_adm_profilekey', apiUrl: 'https://profile.example' } },
+        activeProfile: 'default',
+      }),
+      { flag: 'w', mode: 0o600 },
+    );
+
+    const result = run('api GET /v1/records --api-key agl_adm_flagkey --dry-run --json', {
+      HOME: home,
+    });
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.auth.source).toBe('flag-or-env');
+    expect(parsed.auth.apiKey).toBe('****gkey');
     rmSync(home, { recursive: true, force: true });
   });
 

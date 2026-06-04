@@ -7,11 +7,13 @@ export interface ApiResponse {
 export class ApiClient {
   private readonly apiUrl: string;
   private readonly apiKey: string;
+  private readonly userAgent: string;
   private readonly timeoutMs: number;
 
-  constructor(apiUrl: string, apiKey: string, timeoutMs = 30_000) {
+  constructor(apiUrl: string, apiKey: string, version = '0.0.0', timeoutMs = 30_000) {
     this.apiUrl = apiUrl.replace(/\/+$/, '');
     this.apiKey = apiKey;
+    this.userAgent = `agledger-cli/${version}`;
     this.timeoutMs = timeoutMs;
   }
 
@@ -23,7 +25,18 @@ export class ApiClient {
       body?: unknown;
     },
   ): Promise<ApiResponse> {
-    const url = new URL(path, this.apiUrl);
+    // Reject protocol-relative paths ("//host/...") — with `new URL` they would
+    // be resolved against the base's protocol and silently retarget the request
+    // to an attacker-controlled host. A legitimate API path starts with a single
+    // "/". Callers (api.ts) guarantee a leading slash.
+    if (path.startsWith('//')) {
+      throw new Error(`Invalid path '${path}': protocol-relative paths are not allowed`);
+    }
+
+    // Concatenate rather than `new URL(path, base)` so any base-URL path prefix
+    // (e.g. an API gateway mount point) is preserved instead of being dropped.
+    // `apiUrl` has trailing slashes stripped; `path` is guaranteed leading-slash.
+    const url = new URL(this.apiUrl + path);
 
     if (options?.query) {
       for (const [k, v] of Object.entries(options.query)) {
@@ -36,7 +49,7 @@ export class ApiClient {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.apiKey}`,
       Accept: 'application/json',
-      'User-Agent': 'agledger-cli/0.8.8',
+      'User-Agent': this.userAgent,
     };
 
     if (options?.body !== undefined) {
