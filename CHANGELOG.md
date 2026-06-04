@@ -4,6 +4,10 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.8.9] - 2026-06-04
+
+No functional change. First release published from CI with **build provenance** via npm trusted publishing (OIDC) — npm attaches a Sigstore provenance attestation automatically; verify with `npm audit signatures`. A CycloneDX SBOM is attached to the release. This package now lives in its own source-of-truth repo `agledger-ai/cli` and resolves `@agledger/verify-core@0.1.4`.
+
 ## [0.8.8] - 2026-06-02
 
 ### Security
