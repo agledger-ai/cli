@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { Command, Flags } from '@oclif/core';
 import { ApiClient } from './api-client.js';
 import type { ApiResponse } from './api-client.js';
+import { readConfig } from './util/config.js';
 
 /** Semantic exit codes for agent consumption. Stable across releases. */
 export const ExitCode = {
@@ -54,6 +55,9 @@ export abstract class BaseCommand extends Command {
     quiet: Flags.boolean({ description: 'Suppress output (exit code only)', default: false }),
     'api-key': Flags.string({ description: 'AGLedger API key', env: 'AGLEDGER_API_KEY' }),
     'api-url': Flags.string({ description: 'AGLedger API base URL', env: 'AGLEDGER_API_URL' }),
+    profile: Flags.string({
+      description: 'Stored profile to use for credentials (falls back to the active profile)',
+    }),
   };
 
   protected get isJson(): boolean {
@@ -64,8 +68,41 @@ export abstract class BaseCommand extends Command {
     return process.argv.includes('--quiet');
   }
 
-  protected createApiClient(flags: { 'api-key'?: string; 'api-url'?: string }): ApiClient {
-    const apiKey = flags['api-key'];
+  /**
+   * Resolve credentials and build the API client.
+   *
+   * Precedence:
+   *   API key  — `--api-key` flag > `AGLEDGER_API_KEY` env > stored profile.
+   *   API URL  — `--api-url` flag > `AGLEDGER_API_URL` env > stored profile url > default.
+   *
+   * oclif merges the flag and its `env` source into `flags['api-key']` /
+   * `flags['api-url']`, so a present value there already represents flag-or-env
+   * (both of which outrank the profile). When absent, fall back to the selected
+   * profile (`--profile <name>`, else the active profile) in ~/.agledger/config.json.
+   */
+  protected createApiClient(flags: { 'api-key'?: string; 'api-url'?: string; profile?: string }): ApiClient {
+    const config = readConfig();
+    const profileName = flags.profile ?? config.activeProfile;
+    const profile = profileName ? config.profiles[profileName] : undefined;
+
+    // Treat an empty-string flag/env (e.g. AGLEDGER_API_KEY="") as absent so the
+    // profile fallback still applies.
+    const flagKey = flags['api-key'] || undefined;
+    const flagUrl = flags['api-url'] || undefined;
+
+    // A profile is only consulted when the flag/env didn't supply the key. If the
+    // caller explicitly named a missing profile AND has no flag/env key to fall
+    // back on, that's an error worth surfacing (rather than a generic no-key one).
+    if (flags.profile && !profile && !flagKey) {
+      this.failWith(
+        ErrorCode.AUTH_REQUIRED,
+        `Profile '${flags.profile}' not found.`,
+        ExitCode.AUTH_ERROR,
+        'Run `agledger config list` to see profiles, or `agledger login --profile <name>` to create one.',
+      );
+    }
+
+    const apiKey = flagKey ?? profile?.apiKey;
     if (!apiKey) {
       this.failWith(
         ErrorCode.AUTH_REQUIRED,
@@ -73,7 +110,40 @@ export abstract class BaseCommand extends Command {
         ExitCode.AUTH_ERROR,
       );
     }
-    return new ApiClient(flags['api-url'] || 'https://agledger.example.com', apiKey!);
+
+    const apiUrl = flagUrl ?? profile?.apiUrl ?? 'https://agledger.example.com';
+    return new ApiClient(apiUrl, apiKey!, this.config.version);
+  }
+
+  /**
+   * Resolve the credentials that an actual call would use, for --dry-run display.
+   * Same precedence as `createApiClient` (flag > env > profile), but the key is
+   * masked so it is safe to print. Returns the resolved api URL and which source
+   * the key came from. Does not throw on a missing key (dry-run is non-fatal).
+   */
+  protected resolvedAuth(flags: { 'api-key'?: string; 'api-url'?: string; profile?: string }): {
+    apiUrl: string;
+    apiKey: string | null;
+    source: 'flag-or-env' | 'profile' | 'none';
+    profile?: string;
+  } {
+    const config = readConfig();
+    const profileName = flags.profile ?? config.activeProfile;
+    const profile = profileName ? config.profiles[profileName] : undefined;
+
+    const flagKey = flags['api-key'] || undefined;
+    const flagUrl = flags['api-url'] || undefined;
+    const apiKey = flagKey ?? profile?.apiKey ?? null;
+    const source = flagKey ? 'flag-or-env' : profile?.apiKey ? 'profile' : 'none';
+    const apiUrl = flagUrl ?? profile?.apiUrl ?? 'https://agledger.example.com';
+
+    const mask = (k: string): string => (k.length <= 4 ? '****' : `****${k.slice(-4)}`);
+    return {
+      apiUrl,
+      apiKey: apiKey ? mask(apiKey) : null,
+      source,
+      ...(source === 'profile' && profileName ? { profile: profileName } : {}),
+    };
   }
 
   /**
@@ -81,7 +151,7 @@ export abstract class BaseCommand extends Command {
    * (e.g. `/v1/records`, `/health`, `/federation/v1/peer`). No auto-prefixing.
    */
   protected async callApi(
-    flags: { 'api-key'?: string; 'api-url'?: string },
+    flags: { 'api-key'?: string; 'api-url'?: string; profile?: string },
     method: string,
     path: string,
     options?: { query?: Record<string, unknown>; body?: unknown },

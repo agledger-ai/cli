@@ -4,6 +4,24 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.8.10] - 2026-06-04
+
+### Fixed
+
+- **Stored login profiles now actually authenticate API calls.** Credentials previously resolved only from the `--api-key` flag / `AGLEDGER_API_KEY` env — the profile written by `agledger login` / `config use` was never read back, so authenticated calls after a login failed with `AUTH_REQUIRED`. Credentials now resolve with precedence **`--api-key` flag > `AGLEDGER_API_KEY` env > stored profile**, and the API URL with **`--api-url` flag > `AGLEDGER_API_URL` env > stored profile URL > default**. `--profile <name>` selects a specific stored profile for any command. `agledger api --dry-run` now echoes the resolved auth (URL, source, masked key).
+
+### Changed
+
+- **`User-Agent` is derived from the package version** instead of a hardcoded literal (was the stale `agledger-cli/0.8.8`).
+
+### Security
+
+- `ApiClient` rejects protocol-relative request paths (`//host/...`), which `new URL(path, base)` would otherwise resolve to an attacker-controlled host. Any base-URL path prefix (e.g. an API-gateway mount point) is now preserved instead of being dropped.
+
+### Docs
+
+- Corrected the CLI-local command count (9 → 10) and added the `docs` command to the README command table; clarified the Authentication sections to describe the now-working profile flow and the credential precedence.
+
 ## [0.8.9] - 2026-06-04
 
 No functional change. First release published from CI with **build provenance** via npm trusted publishing (OIDC) — npm attaches a Sigstore provenance attestation automatically; verify with `npm audit signatures`. A CycloneDX SBOM is attached to the release. This package now lives in its own source-of-truth repo `agledger-ai/cli` and resolves `@agledger/verify-core@0.1.4`.

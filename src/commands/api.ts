@@ -125,7 +125,7 @@ export default class Api extends BaseCommand {
 
       if (flags['dry-run']) {
         this.dryRunOutput(
-          { method, path: args.path, ...options },
+          { method, path: args.path, ...options, auth: this.resolvedAuth(flags) },
           `would call ${method} ${args.path}`,
         );
         return;
@@ -200,7 +200,7 @@ export default class Api extends BaseCommand {
   }
 
   private async runPaginated(
-    flags: { 'api-key'?: string; 'api-url'?: string },
+    flags: { 'api-key'?: string; 'api-url'?: string; profile?: string },
     path: string,
     params: unknown,
     dryRun: boolean,
@@ -212,7 +212,7 @@ export default class Api extends BaseCommand {
 
     if (dryRun) {
       this.dryRunOutput(
-        { method: 'GET', path, query: baseQuery, paginate: true },
+        { method: 'GET', path, query: baseQuery, paginate: true, auth: this.resolvedAuth(flags) },
         `would stream all pages of GET ${path}`,
       );
       return;

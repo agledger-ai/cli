@@ -43,13 +43,11 @@ agledger api POST /v1/records \
   -F type=notarize-generic-v1 \
   -F criteria.task_description='summarize Q3 filings'
 
-# Submit a completion
+# Submit a completion. On a gated record the principal then renders a Verdict
+# (accept / reject) on the Completion — use the route documented in the API
+# (see `agledger api GET /openapi.json`).
 agledger api POST /v1/records/<record-id>/completions \
   --data '{"evidence":{"summary":"delivered 500x copper wire","evidenceUrl":"https://orders.example.com/CW-500"}}'
-
-# Render a verdict
-agledger api POST /v1/records/<record-id>/verdict \
-  -F completionId=<completion-id> -F verdict=accept
 ```
 
 ## Why a thin cover?
@@ -82,7 +80,7 @@ Merging order (low → high): `--data` → `--input` → `-F` → `--query`. Lat
 ## Discovery
 
 ```bash
-agledger list-commands --json          # 9 CLI-local commands
+agledger list-commands --json          # 10 CLI-local commands
 agledger help-json api --json          # Schema for `api` (args + flags)
 agledger discover                       # Health + identity + quickstart
 agledger api GET /openapi.json          # Full API route catalog
@@ -99,21 +97,32 @@ agledger api GET /openapi.json          # Full API route catalog
 | `auth` | Check current login state (exit 0 either way) |
 | `config` | `list` / `get` / `use <profile>` / `path` |
 | `verify` | Offline audit export verification (COSE_Sign1 + Ed25519, RFC 9052, no network) |
+| `docs` | Fetch the API's agent-oriented narrative (`llms.txt` / `--full`) |
 | `list-commands` | Inventory (this list) |
 | `help-json` | Per-command schema |
 
 ## Authentication
 
 ```bash
-# Verifies the key against the API, stores under ~/.agledger/config.json
+# Verifies the key against the API, then stores it under ~/.agledger/config.json (0600)
 agledger login --api-key agl_adm_... --profile prod
 
-# Switch profiles
+# Switch the active profile — subsequent commands use its key automatically
 agledger config use prod
 
-# Or just use env vars per-invocation
+# Run a one-off against a specific stored profile
+agledger api GET /v1/records --profile prod
+
+# Or pass credentials per-invocation via env or flags (no stored profile needed)
 AGLEDGER_API_KEY=... AGLEDGER_API_URL=... agledger api GET /v1/records
 ```
+
+**Credential precedence** (highest first) — applied per command:
+
+- **API key:** `--api-key` flag → `AGLEDGER_API_KEY` env → stored profile (`--profile <name>`, else the active profile).
+- **API URL:** `--api-url` flag → `AGLEDGER_API_URL` env → stored profile URL → default.
+
+So once you `agledger login`, plain `agledger api ...` calls authenticate from the stored profile with no flags or env. `--dry-run` echoes the resolved auth (URL, source, masked key) so you can confirm which credentials a call would use without sending it.
 
 Agent keys (`agl_agt_*`) and admin keys (`agl_adm_*`) are both accepted — the API routes them appropriately.
 
