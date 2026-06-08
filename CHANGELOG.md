@@ -4,6 +4,14 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] - 2026-06-08
+
+General-availability release, tracking AGLedger API **v1.0.0 GA**. The CLI is a thin pass-through over the API, so the surface is unchanged. **Includes the 0.8.10 fixes below** — 0.8.10 was tagged but never reached npm (its release run failed at the SBOM-pack step before publishing), so those changes ship for the first time here.
+
+### Fixed
+
+- Release pipeline: the SBOM "pack tarball" step now takes only the last line of `npm pack` output (`prepack` runs `oclif manifest`, which prints to stdout), fixing the multiline `$GITHUB_OUTPUT` failure that blocked the 0.8.10 publish.
+
 ## [0.8.10] - 2026-06-04
 
 ### Fixed
