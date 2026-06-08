@@ -4,3 +4,4 @@ dist/
 .turbo/
 sbom.cdx.json
 *.log
+*.tgz
