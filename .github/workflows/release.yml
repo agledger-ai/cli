@@ -70,7 +70,10 @@ jobs:
       # below; we still publish from the directory so prepublishOnly gates run.
       - name: Pack tarball (SBOM attestation subject)
         id: pack
-        run: echo "tarball=$(npm pack --silent)" >> "$GITHUB_OUTPUT"
+        # `prepack` runs `oclif manifest`, which prints "wrote manifest to …" to
+        # stdout, so `npm pack --silent` emits two lines — take only the last
+        # (the tarball filename) or the multiline value breaks $GITHUB_OUTPUT.
+        run: echo "tarball=$(npm pack --silent | tail -1)" >> "$GITHUB_OUTPUT"
 
       - name: Attest CycloneDX SBOM (signed, verifiable)
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0 (attest-sbom is deprecated)
