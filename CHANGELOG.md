@@ -4,6 +4,12 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-06-20
+
+### Changed
+
+- Bumped `@agledger/verify-core` to `^1.0.0` (now GA at 1.0.0 alongside the API and the published package line). No CLI-surface or behavior changes — the offline `verify` command's logic is unchanged. `oclif.manifest.json` regenerated.
+
 ## [1.0.1] - 2026-06-10
 
 ### Changed
