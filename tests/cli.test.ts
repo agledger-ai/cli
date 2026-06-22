@@ -360,6 +360,34 @@ describe('discover + auth', () => {
     const parsed = JSON.parse(result.stdout);
     expect(parsed.authenticated).toBe(false);
   });
+
+  // Regression for cross-repo #94: `auth` used to read only the --api-key
+  // flag/env, so right after a successful `login` (which writes the key to a
+  // stored profile) it falsely reported authenticated:false. It must now resolve
+  // the stored profile and verify it — here the API is unreachable, so the fix is
+  // proven by the command getting PAST the key guard (a network error) instead of
+  // the old false short-circuit.
+  it('auth resolves a stored profile instead of reporting not-authenticated (#94)', () => {
+    const home = isolatedHome();
+    const configDir = join(home, '.agledger');
+    mkdirSync(configDir, { recursive: true, mode: 0o700 });
+    writeFileSync(
+      join(configDir, 'config.json'),
+      JSON.stringify({
+        profiles: { default: { apiKey: 'agl_adm_stored', apiUrl: 'http://127.0.0.1:9' } },
+        activeProfile: 'default',
+      }),
+      { flag: 'w', mode: 0o600 },
+    );
+    const result = run('auth --json', { HOME: home });
+    // Got past the key guard: it attempted verification and hit the unreachable
+    // API, rather than the pre-fix `{authenticated:false, "No API key configured"}`.
+    expect(result.exitCode).not.toBe(0);
+    const combined = result.stdout + result.stderr;
+    expect(combined).not.toContain('No API key configured');
+    expect(combined).not.toContain('"authenticated":false');
+    rmSync(home, { recursive: true, force: true });
+  });
 });
 
 // ---------------------------------------------------------------------------

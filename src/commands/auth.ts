@@ -13,8 +13,12 @@ export default class Auth extends BaseCommand {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Auth);
-    const apiKey = flags['api-key'];
-    if (!apiKey) {
+    // Resolve the key the same way an actual call does: --api-key flag > env >
+    // stored profile in ~/.agledger/config.json. The previous check looked only
+    // at the flag/env, so `agledger auth` reported not-authenticated right after
+    // a successful `login` wrote the key to a profile (cross-repo #94).
+    const auth = this.resolvedAuth(flags);
+    if (auth.source === 'none') {
       this.output({ authenticated: false, message: 'No API key configured. Run `agledger login --api-key <key>`.' });
       return;
     }
@@ -23,7 +27,12 @@ export default class Auth extends BaseCommand {
       if (!response.ok) {
         this.handleApiError(response);
       }
-      this.output({ authenticated: true, account: response.body });
+      this.output({
+        authenticated: true,
+        source: auth.source,
+        ...(auth.profile ? { profile: auth.profile } : {}),
+        account: response.body,
+      });
     } catch (err) {
       this.handleError(err);
     }

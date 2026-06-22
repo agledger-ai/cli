@@ -4,6 +4,12 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.3] - 2026-06-22
+
+### Fixed
+
+- **`agledger auth` reported not-authenticated right after a successful `login`** (cross-repo #94). The status check looked only at the `--api-key` flag / `AGLEDGER_API_KEY` env var, ignoring the credential `login` writes to a stored profile in `~/.agledger/config.json` — so the first command a new user runs to confirm setup said it failed when it hadn't. `auth` now resolves the key with the same precedence as every other command (flag → env → active stored profile) and reports the resolving `source` (and `profile`, when applicable). A keyless machine still reports `authenticated: false` with exit 0. Validated end-to-end against a live API v1.0.3.
+
 ## [1.0.2] - 2026-06-20
 
 ### Changed
