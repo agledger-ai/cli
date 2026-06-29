@@ -2,15 +2,15 @@
 
 The official CLI for the [AGLedger](https://agledger.ai) API — accountability infrastructure for AI agents. The Layer 3 accountability layer of the agent stack.
 
-A **thin cover** over the API. The CLI passes your request straight through to the API and forwards the response — no hand-coded per-endpoint wrappers, no flag-to-body translation, no drift. Every AGLedger API route is reachable via `agledger api <METHOD> <path>`.
+A **thin cover** over the API. The CLI passes your request straight through to the API and forwards the response: no hand-coded per-endpoint wrappers, no flag-to-body translation, no drift. Every AGLedger API route is reachable via `agledger api <METHOD> <path>`.
 
 **Learn more**
 
-- [agledger.ai](https://agledger.ai) — what AGLedger is and why Layer 3 accountability matters
-- [How it works](https://agledger.ai/how-it-works) — the four-endpoint lifecycle: record, completion, verdict, fulfill
-- [Glossary](https://agledger.ai/glossary) — canonical definitions of Record, Completion, SCITT Receipt, Verdict, Settlement Signal
-- [API reference](https://agledger.ai/api) — every endpoint the CLI covers
-- [Documentation](https://agledger.ai/docs) — installation and integration guides
+- [agledger.ai](https://agledger.ai): what AGLedger is and why Layer 3 accountability matters
+- [How it works](https://agledger.ai/how-it-works): the four-endpoint lifecycle (record, completion, verdict, fulfill)
+- [Glossary](https://agledger.ai/glossary): canonical definitions of Record, Completion, SCITT Receipt, Verdict, Settlement Signal
+- [API reference](https://agledger.ai/api): every endpoint the CLI covers
+- [Documentation](https://agledger.ai/docs): installation and integration guides
 
 ## Install
 
@@ -73,7 +73,7 @@ Merging order (low → high): `--data` → `--input` → `-F` → `--query`. Lat
 - `--quiet` suppresses output (exit code only)
 - `--dry-run` on `agledger api` shows the request without sending
 - `--paginate` on GET follows cursor pagination and streams NDJSON
-- Structured errors on stderr: `{error: true, code, message, suggestion, ...}` — API errors pass through verbatim
+- Structured errors on stderr: `{error: true, code, message, suggestion, ...}`; API errors pass through verbatim
 - Semantic exit codes: 0 (OK), 2 (usage), 3 (auth), 4 (forbidden), 5 (not found), 6 (conflict), 7 (rate limit), 8 (server), 9 (network), 10 (timeout)
 - `NO_COLOR` supported per [no-color.org](https://no-color.org)
 
@@ -117,14 +117,14 @@ agledger api GET /v1/records --profile prod
 AGLEDGER_API_KEY=... AGLEDGER_API_URL=... agledger api GET /v1/records
 ```
 
-**Credential precedence** (highest first) — applied per command:
+**Credential precedence** (highest first), applied per command:
 
 - **API key:** `--api-key` flag → `AGLEDGER_API_KEY` env → stored profile (`--profile <name>`, else the active profile).
 - **API URL:** `--api-url` flag → `AGLEDGER_API_URL` env → stored profile URL → default.
 
 So once you `agledger login`, plain `agledger api ...` calls authenticate from the stored profile with no flags or env. `--dry-run` echoes the resolved auth (URL, source, masked key) so you can confirm which credentials a call would use without sending it.
 
-Agent keys (`agl_agt_*`) and admin keys (`agl_adm_*`) are both accepted — the API routes them appropriately.
+Agent keys (`agl_agt_*`) and admin keys (`agl_adm_*`) are both accepted; the API routes them appropriately.
 
 ## Requirements
 
