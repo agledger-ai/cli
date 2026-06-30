@@ -1,6 +1,6 @@
 # @agledger/cli
 
-The official CLI for the [AGLedger](https://agledger.ai) API — accountability infrastructure for AI agents. The Layer 3 accountability layer of the agent stack.
+The official CLI for the [AGLedger](https://agledger.ai) API: accountability infrastructure for AI agents. The Layer 3 accountability layer of the agent stack.
 
 A **thin cover** over the API. The CLI passes your request straight through to the API and forwards the response: no hand-coded per-endpoint wrappers, no flag-to-body translation, no drift. Every AGLedger API route is reachable via `agledger api <METHOD> <path>`.
 
@@ -44,7 +44,7 @@ agledger api POST /v1/records \
   -F criteria.task_description='summarize Q3 filings'
 
 # Submit a completion. On a gated record the principal then renders a Verdict
-# (accept / reject) on the Completion — use the route documented in the API
+# (accept / reject) on the Completion; use the route documented in the API
 # (see `agledger api GET /openapi.json`).
 agledger api POST /v1/records/<record-id>/completions \
   --data '{"evidence":{"summary":"delivered 500x copper wire","evidenceUrl":"https://orders.example.com/CW-500"}}'
@@ -52,7 +52,7 @@ agledger api POST /v1/records/<record-id>/completions \
 
 ## Why a thin cover?
 
-- **Zero drift.** When the API adds, renames, or removes a route, the CLI keeps working — no code change required.
+- **Zero drift.** When the API adds, renames, or removes a route, the CLI keeps working, no code change required.
 - **One mental model.** The API docs are the CLI docs. What you read in the OpenAPI spec is what you type.
 - **All 250+ routes on day one.** You get full parity, not a hand-picked subset.
 
@@ -107,7 +107,7 @@ agledger api GET /openapi.json          # Full API route catalog
 # Verifies the key against the API, then stores it under ~/.agledger/config.json (0600)
 agledger login --api-key agl_adm_... --profile prod
 
-# Switch the active profile — subsequent commands use its key automatically
+# Switch the active profile; subsequent commands use its key automatically
 agledger config use prod
 
 # Run a one-off against a specific stored profile
