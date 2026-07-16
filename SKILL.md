@@ -37,12 +37,12 @@ agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value ...]
 **What verification proves:**
 - Every entry was signed by a key listed in the export (or supplied via `--keys`) at the moment the vault wrote it.
 - Payloads have not been altered since signing (SHA-256 recomputation matches the stored `payload_hash` over the signed COSE_Sign1 bytes).
-- The hash chain is contiguous — no entries were inserted, removed, or reordered between positions.
+- The hash chain is contiguous: no entries were inserted, removed, or reordered between positions.
 - On failure, `brokenAt.code` is a canonical SCREAMING_SNAKE failure code (e.g. `CHAIN_HASH_MISMATCH`, `CHAIN_SIGNATURE_INVALID`).
 
 **What verification does NOT prove:**
-- That the signing key is *legitimate* — obtain the key out of band from `/.well-known/scitt-keys` on the issuing instance (or the `/v1/verification-keys` API) and pass it via `--keys --require-out-of-band-keys`.
-- That the export is *complete* — a vault operator can still truncate the export at either end.
+- That the signing key is *legitimate*. Obtain the key out of band from `/.well-known/scitt-keys` on the issuing instance (or the `/v1/verification-keys` API) and pass it via `--keys --require-out-of-band-keys`.
+- That the export is *complete*. A vault operator can still truncate the export at either end.
 - That the *content* the payload describes actually happened. Payloads record what the agent notarized (declared intent and reported result); the verifier checks tamper-evidence, not whether the work occurred.
 
 ## Agent-native patterns

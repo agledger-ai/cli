@@ -51,7 +51,7 @@ export default class Verify extends BaseCommand {
     'require-out-of-band-keys': Flags.boolean({
       description:
         'High-assurance: refuse keys embedded in the export. Verifying the engine against ' +
-        'its own embedded key is not an independent audit — supply keys via --keys instead.',
+        'its own embedded key is not an independent audit, so supply keys via --keys instead.',
       default: false,
     }),
   };
