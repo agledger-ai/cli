@@ -1,13 +1,13 @@
 # @agledger/cli
 
-The official CLI for the [AGLedger](https://agledger.ai) API: accountability infrastructure for AI agents. The Layer 3 accountability layer of the agent stack.
+The official CLI for the [AGLedger](https://agledger.ai) API: change control for AI agents. A self-hosted notary that records every change an agent makes, signed and hash-chained, and gates the ones that matter.
 
 A **thin cover** over the API. The CLI passes your request straight through to the API and forwards the response: no hand-coded per-endpoint wrappers, no flag-to-body translation, no drift. Every AGLedger API route is reachable via `agledger api <METHOD> <path>`.
 
 **Learn more**
 
-- [agledger.ai](https://agledger.ai): what AGLedger is and why Layer 3 accountability matters
-- [How it works](https://agledger.ai/how-it-works): the four-endpoint lifecycle (record, completion, verdict, fulfill)
+- [agledger.ai](https://agledger.ai): what AGLedger is and who needs it
+- [How it works](https://agledger.ai/how-it-works): the record, completion, and verdict lifecycle
 - [Glossary](https://agledger.ai/glossary): canonical definitions of Record, Completion, SCITT Receipt, Verdict, Settlement Signal
 - [API reference](https://agledger.ai/api): every endpoint the CLI covers
 - [Documentation](https://agledger.ai/docs): installation and integration guides
@@ -54,7 +54,7 @@ agledger api POST /v1/records/<record-id>/completions \
 
 - **Zero drift.** When the API adds, renames, or removes a route, the CLI keeps working, no code change required.
 - **One mental model.** The API docs are the CLI docs. What you read in the OpenAPI spec is what you type.
-- **All 250+ routes on day one.** You get full parity, not a hand-picked subset.
+- **Every API route on day one.** You get full parity, not a hand-picked subset.
 
 ## Ways to pass a body
 

@@ -34,7 +34,7 @@ export default class Discover extends BaseCommand {
       : { error: identity.reason instanceof Error ? identity.reason.message : String(identity.reason) };
 
     result.quickstart = {
-      description: 'To track accountability for your work, follow these steps in order:',
+      description: 'To notarize your work, follow these steps in order:',
       steps: [
         { step: 1, action: 'List available Record types', command: 'agledger api GET /v1/schemas' },
         { step: 2, action: 'Get schema for your Record type', command: 'agledger api GET /v1/schemas/{type}' },

@@ -16,7 +16,7 @@ const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
  */
 export default class Api extends BaseCommand {
   static override description =
-    'Call any AGLedger API endpoint. Pass-through with zero flag translation — use the exact path and body shape documented in the API (see `agledger discover` or GET /openapi.json).';
+    'Call any AGLedger API endpoint. Pass-through with zero flag translation: use the exact path and body shape documented in the API (see `agledger discover` or GET /openapi.json).';
 
   static override examples = [
     'agledger api GET /health',

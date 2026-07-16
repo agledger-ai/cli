@@ -14,7 +14,7 @@
           "required": true
         }
       },
-      "description": "Call any AGLedger API endpoint. Pass-through with zero flag translation — use the exact path and body shape documented in the API (see `agledger discover` or GET /openapi.json).",
+      "description": "Call any AGLedger API endpoint. Pass-through with zero flag translation: use the exact path and body shape documented in the API (see `agledger discover` or GET /openapi.json).",
       "examples": [
         "agledger api GET /health",
         "agledger api GET /v1/records -F status=ACTIVE -F limit=50",
@@ -680,7 +680,7 @@
           "type": "option"
         },
         "require-out-of-band-keys": {
-          "description": "High-assurance: refuse keys embedded in the export. Verifying the engine against its own embedded key is not an independent audit — supply keys via --keys instead.",
+          "description": "High-assurance: refuse keys embedded in the export. Verifying the engine against its own embedded key is not an independent audit, so supply keys via --keys instead.",
           "name": "require-out-of-band-keys",
           "allowNo": false,
           "type": "boolean"
@@ -702,5 +702,5 @@
       ]
     }
   },
-  "version": "1.0.3"
+  "version": "1.0.4"
 }
