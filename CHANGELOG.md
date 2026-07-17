@@ -4,6 +4,16 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.5] - 2026-07-16
+
+Docs and tooling. No command, output, or behavior change.
+
+### Changed
+
+- README corrections (cross-repo #99): dropped the drift-prone "250+ routes" claim in favor of a parity statement, the `agledger_discover` quickstart string now leads with notarize, and removed the phantom "fulfill" endpoint and "Layer 3" framing along with stale naming history.
+- Refreshed the lockfile to in-range latest (`@agledger/verify-core` 1.0.2, oclif, and dev tooling).
+- Upgraded the TypeScript devDependency to `^7.0.2`. Build (including the `oclif manifest` regeneration), typecheck, and tests all pass under 7.0.2.
+
 ## [1.0.4] - 2026-06-29
 
 ### Changed
