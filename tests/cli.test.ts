@@ -96,6 +96,11 @@ describe('command surface', () => {
     expect(parsed.flags.query).toBeDefined();
     expect(parsed.flags['dry-run']).toBeDefined();
     expect(parsed.flags.paginate).toBeDefined();
+    // cross-repo #100: the schema must surface the short alias so a doc that
+    // shows `-F key=val` can be verified against help-json. A flag with no
+    // short alias omits `char` entirely.
+    expect(parsed.flags.field.char).toBe('F');
+    expect(parsed.flags.data.char).toBeUndefined();
   });
 
   it('help-json returns schema for discover, login, logout, config, auth', () => {

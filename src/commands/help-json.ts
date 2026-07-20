@@ -36,14 +36,20 @@ export default class HelpJson extends BaseCommand {
         flags: Object.fromEntries(
           Object.entries(cmd.flags ?? {})
             .filter(([k]) => !['json', 'api-key', 'api-url'].includes(k))
-            .map(([k, v]) => [
-              k,
-              {
-                description: v.description,
-                required: (v as Record<string, unknown>).required ?? false,
-                type: v.type,
-              },
-            ]),
+            .map(([k, v]) => {
+              const char = (v as Record<string, unknown>).char;
+              return [
+                k,
+                {
+                  description: v.description,
+                  required: (v as Record<string, unknown>).required ?? false,
+                  type: v.type,
+                  // Surface the short alias (e.g. -F for --field) so a doc that
+                  // shows the short form can be verified against this schema.
+                  ...(typeof char === 'string' ? { char } : {}),
+                },
+              ];
+            }),
         ),
       });
     } catch (err) {

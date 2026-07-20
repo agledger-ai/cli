@@ -4,6 +4,12 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.6] - 2026-07-20
+
+### Fixed
+
+- `help-json <command>` now surfaces a flag's short alias as `char` (cross-repo #100). The `-F` alias on `agledger api --field` has always worked, but the discovery schema listed only the long form, so a doc showing `-F key=val` could not be verified against `help-json`. Flags without a short alias omit `char`.
+
 ## [1.0.5] - 2026-07-16
 
 Docs and tooling. No command, output, or behavior change.
