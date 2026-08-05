@@ -678,3 +678,55 @@ describe('verify command', () => {
     expect(result.exitCode).toBe(2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// verify: full vendored conformance corpus, manifest-driven. Every vector in
+// manifest-export.json runs through the built CLI, so a regression in the
+// verify-core dispatch (e.g. an Ed25519-only build) fails here instead of
+// staying green behind the handful of hand-picked vectors above.
+// ---------------------------------------------------------------------------
+describe('verify command: conformance corpus (manifest-export.json)', () => {
+  const CONFORMANCE = resolve(import.meta.dirname, '../testdata/conformance');
+  interface ManifestVector {
+    file: string;
+    kind: string;
+    expect: 'pass' | 'fail';
+    failureCode?: string;
+    brokenAt?: number;
+    options?: { keysFile?: string; requireKeyId?: string; requireOutOfBandKeys?: boolean };
+  }
+  const manifest = JSON.parse(
+    readFileSync(join(CONFORMANCE, 'manifest-export.json'), 'utf-8'),
+  ) as { vectors: ManifestVector[] };
+
+  for (const vector of manifest.vectors) {
+    const label =
+      vector.expect === 'pass'
+        ? `${vector.file} -> pass`
+        : `${vector.file} -> fail (${vector.failureCode})`;
+    it(label, () => {
+      let flags = vector.options?.keysFile
+        ? ` --keys ${join(CONFORMANCE, vector.options.keysFile)}`
+        : '';
+      if (vector.options?.requireKeyId) flags += ` --require-key-id ${vector.options.requireKeyId}`;
+      if (vector.options?.requireOutOfBandKeys) flags += ' --require-out-of-band-keys';
+      const result = run(`verify ${join(CONFORMANCE, vector.file)}${flags} --json`);
+      const parsed = JSON.parse(result.stdout) as {
+        valid: boolean;
+        brokenAt?: { code: string; position: number };
+      };
+      if (vector.expect === 'pass') {
+        expect(result.exitCode).toBe(0);
+        expect(parsed.valid).toBe(true);
+        expect(parsed.brokenAt).toBeUndefined();
+      } else {
+        expect(result.exitCode).toBe(1);
+        expect(parsed.valid).toBe(false);
+        expect(parsed.brokenAt?.code).toBe(vector.failureCode);
+        if (vector.brokenAt !== undefined) {
+          expect(parsed.brokenAt?.position).toBe(vector.brokenAt);
+        }
+      }
+    });
+  }
+});

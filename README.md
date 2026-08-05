@@ -96,7 +96,7 @@ agledger api GET /openapi.json          # Full API route catalog
 | `logout` | Remove profile(s) |
 | `auth` | Check current login state (exit 0 either way) |
 | `config` | `list` / `get` / `use <profile>` / `path` |
-| `verify` | Offline audit export verification (COSE_Sign1 + Ed25519, RFC 9052, no network) |
+| `verify` | Offline audit export verification (COSE_Sign1, RFC 9052; Ed25519 or ES256; no network) |
 | `docs` | Fetch the API's agent-oriented narrative (`llms.txt` / `--full`) |
 | `list-commands` | Inventory (this list) |
 | `help-json` | Per-command schema |

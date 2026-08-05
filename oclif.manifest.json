@@ -622,7 +622,7 @@
           "required": true
         }
       },
-      "description": "Verify a record audit export offline (COSE_Sign1 envelope, RFC 9052 + Ed25519).",
+      "description": "Verify a record audit export offline (COSE_Sign1 envelope, RFC 9052; Ed25519 or ES256).",
       "examples": [
         "<%= config.bin %> verify audit-export.json",
         "<%= config.bin %> verify audit-export.json --keys vault-keys.json",
@@ -702,5 +702,5 @@
       ]
     }
   },
-  "version": "1.1.0"
+  "version": "1.2.0"
 }

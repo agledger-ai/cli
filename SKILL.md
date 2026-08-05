@@ -32,7 +32,7 @@ agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value ...]
 - `agledger api GET /openapi.json`: full API route catalog
 
 ## Offline audit verification
-- `agledger verify <audit-export.json>`: verify a record audit export offline (COSE_Sign1 envelopes per RFC 9052, hash chain + Ed25519 signatures). No network, no API key. Exit 0 if valid, 1 if broken; `--json` for structured output; `--keys <file>` supplies keys out of band (merged over any embedded in the export); `--require-key-id <id>` rejects exports signed by an unexpected key; `--require-out-of-band-keys` refuses the export's own embedded keys for an independent audit.
+- `agledger verify <audit-export.json>`: verify a record audit export offline (COSE_Sign1 envelopes per RFC 9052, hash chain + envelope signatures, Ed25519 or ES256). No network, no API key. Exit 0 if valid, 1 if broken; `--json` for structured output; `--keys <file>` supplies keys out of band (merged over any embedded in the export); `--require-key-id <id>` rejects exports signed by an unexpected key; `--require-out-of-band-keys` refuses the export's own embedded keys for an independent audit.
 
 **What verification proves:**
 - Every entry was signed by a key listed in the export (or supplied via `--keys`) at the moment the vault wrote it.
