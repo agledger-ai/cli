@@ -16,7 +16,7 @@ import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
  */
 export default class Verify extends BaseCommand {
   static override description =
-    'Verify a record audit export offline (COSE_Sign1 envelope, RFC 9052 + Ed25519).';
+    'Verify a record audit export offline (COSE_Sign1 envelope, RFC 9052; Ed25519 or ES256).';
 
   static override examples = [
     '<%= config.bin %> verify audit-export.json',

@@ -4,6 +4,18 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-08-05
+
+Signing-agility wave 2.
+
+### Added
+
+- **`verify` handles ES256 chains** via `@agledger/verify-core` 1.2.0 (dispatch bound to the trusted key's SPKI; unsupported algorithms still fail closed as `CHAIN_UNSUPPORTED_ALGORITHM`).
+
+### Changed
+
+- **Conformance corpus regenerated from engine 1.3.4 @ `ed3369ab`** (export slice, including the ES256 wave).
+
 ## [1.1.0] - 2026-08-05
 
 ### Changed
