@@ -4,6 +4,23 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.1] - 2026-08-07
+
+### Fixed
+
+- **`--dry-run` no longer reports a server the real call refuses to use.** agents#105 removed the `https://agledger.example.com` placeholder from `createApiClient`, but its sibling `resolvedAuth`, which is the only thing `--dry-run` prints, kept its own copy. With no URL configured, `agledger api GET /v1/records --dry-run` reported `apiUrl: https://agledger.example.com` and exited 0, while the identical invocation without `--dry-run` exited 2 with `CONFIG_ERROR`. The one job of a dry run is to say what the real call would do, and it was naming a host the real call will not contact and the user never configured. It now reports `apiUrl: null` plus an `apiUrlSource` line naming the error the real call raises.
+
+- **The credential-precedence documentation no longer promises a default API URL.** The README and the `createApiClient` doc comment both ended the API-URL chain with "> default", left over from before agents#105. There is no default; the chain ends at the stored profile and a call with nothing configured exits 2.
+
+### Changed
+
+- **`Dry run:` replaces `Dry run —` in the non-JSON header line.** Cosmetic; `--json` output is unaffected.
+
+### Packaging
+
+- **Source maps are no longer published.** `dist/**/*.map` shipped with `sources` pointing at `../src/*.ts` and no `sourcesContent`, and `src/` is not in the tarball, so they resolved to nothing. This was roughly half the tarball's file count.
+- **`bugs` added to package.json.**
+
 ## [1.3.0] - 2026-08-07
 
 ### Changed

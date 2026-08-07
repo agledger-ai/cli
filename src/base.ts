@@ -105,7 +105,8 @@ export abstract class BaseCommand extends Command {
    *
    * Precedence:
    *   API key  — `--api-key` flag > `AGLEDGER_API_KEY` env > stored profile.
-   *   API URL  — `--api-url` flag > `AGLEDGER_API_URL` env > stored profile url > default.
+   *   API URL: `--api-url` flag > `AGLEDGER_API_URL` env > stored profile url.
+   *            There is no default; AGLedger is self-hosted (agents#105).
    *
    * oclif merges the flag and its `env` source into `flags['api-key']` /
    * `flags['api-url']`, so a present value there already represents flag-or-env
@@ -173,7 +174,8 @@ export abstract class BaseCommand extends Command {
    * the key came from. Does not throw on a missing key (dry-run is non-fatal).
    */
   protected resolvedAuth(flags: { 'api-key'?: string; 'api-url'?: string; profile?: string }): {
-    apiUrl: string;
+    apiUrl: string | null;
+    apiUrlSource?: string;
     apiKey: string | null;
     source: 'flag-or-env' | 'profile' | 'none';
     profile?: string;
@@ -186,13 +188,27 @@ export abstract class BaseCommand extends Command {
     const flagUrl = flags['api-url'] || undefined;
     const apiKey = flagKey ?? profile?.apiKey ?? null;
     const source = flagKey ? 'flag-or-env' : profile?.apiKey ? 'profile' : 'none';
-    const apiUrl = flagUrl ?? profile?.apiUrl ?? 'https://agledger.example.com';
+    // Null, not a placeholder. agents#105 removed `agledger.example.com` from
+    // `createApiClient`, which now refuses to build a client without a URL, but
+    // this sibling kept it. The whole job of --dry-run is to report what the
+    // real call would do, and it was reporting a host the real call refuses to
+    // use: the unconfigured case printed agledger.example.com and exited 0
+    // while the same invocation without --dry-run exited 2 with CONFIG_ERROR.
+    const apiUrl = flagUrl ?? profile?.apiUrl ?? null;
 
     const mask = (k: string): string => (k.length <= 4 ? '****' : `****${k.slice(-4)}`);
     return {
       apiUrl,
       apiKey: apiKey ? mask(apiKey) : null,
       source,
+      // A dry run whose real counterpart would refuse to send says so, rather
+      // than leaving a bare `"apiUrl": null` for the reader to interpret.
+      ...(apiUrl === null
+        ? {
+            apiUrlSource:
+              'unconfigured: this call would fail with CONFIG_ERROR (exit 2). Pass --api-url <url>, set AGLEDGER_API_URL, or run `agledger login --api-url <url> --api-key <key>`.',
+          }
+        : {}),
       ...(source === 'profile' && profileName ? { profile: profileName } : {}),
     };
   }
@@ -232,7 +248,7 @@ export abstract class BaseCommand extends Command {
   protected dryRunOutput(payload: unknown, label: string): void {
     if (this.isQuiet) return;
     if (!this.isJson) {
-      process.stderr.write(`Dry run — ${label}:\n`);
+      process.stderr.write(`Dry run: ${label}:\n`);
     }
     this.output(payload);
   }

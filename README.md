@@ -120,9 +120,9 @@ AGLEDGER_API_KEY=... AGLEDGER_API_URL=... agledger api GET /v1/records
 **Credential precedence** (highest first), applied per command:
 
 - **API key:** `--api-key` flag → `AGLEDGER_API_KEY` env → stored profile (`--profile <name>`, else the active profile).
-- **API URL:** `--api-url` flag → `AGLEDGER_API_URL` env → stored profile URL → default.
+- **API URL:** `--api-url` flag → `AGLEDGER_API_URL` env → stored profile URL. There is no default: AGLedger is self-hosted, so a call with no URL from any of those three sources exits 2 with `CONFIG_ERROR` rather than guessing a host.
 
-So once you `agledger login`, plain `agledger api ...` calls authenticate from the stored profile with no flags or env. `--dry-run` echoes the resolved auth (URL, source, masked key) so you can confirm which credentials a call would use without sending it.
+So once you `agledger login`, plain `agledger api ...` calls authenticate from the stored profile with no flags or env. `--dry-run` echoes the resolved auth (URL, source, masked key) so you can confirm which credentials a call would use without sending it; when no URL is configured it reports `apiUrl: null` and names the error the real call would raise.
 
 Agent keys (`agl_agt_*`) and admin keys (`agl_adm_*`) are both accepted; the API routes them appropriately.
 

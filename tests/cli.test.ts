@@ -814,3 +814,52 @@ describe('keyless discovery + error surfaces', () => {
     expect(String(parsed.suggestion)).toContain('list-commands');
   });
 });
+
+// ---------------------------------------------------------------------------
+// --dry-run must describe the call the CLI would actually make
+// ---------------------------------------------------------------------------
+describe('--dry-run reports the real resolved URL', () => {
+  // agents#105 removed the agledger.example.com placeholder from
+  // createApiClient, but resolvedAuth kept its own copy. The result was a
+  // dry run that reported a host the real call refuses to use: --dry-run
+  // printed apiUrl agledger.example.com and exited 0, while the identical
+  // invocation without --dry-run exited 2 with CONFIG_ERROR.
+  it('never invents a placeholder host when no URL is configured', () => {
+    const result = run('api GET /v1/records --dry-run --json', {
+      AGLEDGER_API_KEY: 'agl_adm_test',
+    });
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout);
+    expect(JSON.stringify(parsed)).not.toContain('agledger.example.com');
+    expect(parsed.auth.apiUrl).toBeNull();
+  });
+
+  it('names the error the real call would raise when no URL is configured', () => {
+    const result = run('api GET /v1/records --dry-run --json', {
+      AGLEDGER_API_KEY: 'agl_adm_test',
+    });
+    const parsed = JSON.parse(result.stdout);
+    expect(String(parsed.auth.apiUrlSource)).toContain('CONFIG_ERROR');
+  });
+
+  it('agrees with the real call: dry-run URL null iff the real call exits 2', () => {
+    const dry = run('api GET /v1/records --dry-run --json', {
+      AGLEDGER_API_KEY: 'agl_adm_test',
+    });
+    const real = run('api GET /v1/records --json', { AGLEDGER_API_KEY: 'agl_adm_test' });
+    expect(JSON.parse(dry.stdout).auth.apiUrl).toBeNull();
+    expect(real.exitCode).toBe(2);
+    expect(parseJson(real).code).toBe('CONFIG_ERROR');
+  });
+
+  it('echoes the configured URL when one IS supplied', () => {
+    const result = run('api GET /v1/records --dry-run --json', {
+      AGLEDGER_API_KEY: 'agl_adm_test',
+      AGLEDGER_API_URL: 'https://agledger.internal.example.com',
+    });
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.auth.apiUrl).toBe('https://agledger.internal.example.com');
+    expect(parsed.auth.apiUrlSource).toBeUndefined();
+  });
+});
