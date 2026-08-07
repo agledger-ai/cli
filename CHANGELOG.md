@@ -4,6 +4,25 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-08-07
+
+### Changed
+
+- **Public discovery paths no longer require a key.** `docs`, `discover`, and `agledger api GET` against `/health`, `/llms.txt`, `/llms-full.txt`, `/openapi.json`, `/docs`, `/v1/conformance` and `/.well-known/*` now send the request with no Authorization header instead of refusing client-side with `AUTH_REQUIRED`. The Server answers all of these unauthenticated, so an agent holding only a URL previously had to shell out to curl for exactly the bootstrap arc the product optimizes for, and `discover` could not do what its own description ("Call this first") promised. Only GET qualifies, so this can never wave through a write, and the Server stays the authority: a path that starts requiring auth simply answers 401 (agents#104).
+- **No placeholder API URL.** The built-in default was `https://agledger.example.com`, which resolves nowhere, so a first run with no configuration failed with a DNS error against a host the user never named and was told to check a variable they never set. A missing URL now fails immediately with `CONFIG_ERROR` and says what to pass. Exit code is 2, the existing usage-error code (agents#105).
+- **`NETWORK_ERROR` names the URL it tried and the underlying cause.** `fetch failed` is undici's generic text: DNS failure, connection refused, and TLS problems all printed identically. The message now carries the target and the cause code, with a suggestion tailored to `ENOTFOUND` and `ECONNREFUSED` (agents#105).
+- **`CHAIN_KEY_NOT_YET_ACTIVE`** is reported by `agledger verify` for an entry written before its signing key's activation, via `@agledger/verify-core` 1.3.0; `CHAIN_KEY_EXPIRED` now means the retirement side only (agents#112).
+
+### Fixed
+
+- **README Quick Start and two `api --help` examples returned 400.** They built criteria as `task_description`; both seeded contracts (`notarize-generic-v1`, `principal-gate-generic-v1`) require `summary`, so the first documented write failed against the shipped server. Both forms are now verified to run against a live instance (agents#106).
+- **`verify` no longer borrows the `api` command's recovery text.** Its read and parse failures suggested `--input` and `--data`, flags `verify` does not have (agents#107).
+- **An unknown command gives a nearest match and a way forward** instead of a bare "not found": a did-you-mean, a pointer to `list-commands`, and a note that `agledger api` reaches every route (agents#107).
+
+### Documentation
+
+- Exit code **1** is documented as the catch-all it is: an API error whose status maps to nothing more specific (a 400) exits 1, as does a chain that fails `verify`. Read the `code` field to tell them apart, and treat any non-zero as failure rather than keying on 1 (agents#107).
+
 ## [1.2.0] - 2026-08-05
 
 Signing-agility wave 2.
