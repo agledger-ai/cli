@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - **`--dry-run` no longer reports a server the real call refuses to use.** agents#105 removed the `https://agledger.example.com` placeholder from `createApiClient`, but its sibling `resolvedAuth`, which is the only thing `--dry-run` prints, kept its own copy. With no URL configured, `agledger api GET /v1/records --dry-run` reported `apiUrl: https://agledger.example.com` and exited 0, while the identical invocation without `--dry-run` exited 2 with `CONFIG_ERROR`. The one job of a dry run is to say what the real call would do, and it was naming a host the real call will not contact and the user never configured. It now reports `apiUrl: null` plus an `apiUrlSource` line naming the error the real call raises.
 
-- **The credential-precedence documentation no longer promises a default API URL.** The README and the `createApiClient` doc comment both ended the API-URL chain with "> default", left over from before agents#105. There is no default; the chain ends at the stored profile and a call with nothing configured exits 2.
+- **The credential-precedence documentation no longer promises a default API URL.** The README, the `createApiClient` doc comment, and `SKILL.md` all ended the API-URL chain with "> default", left over from before agents#105. There is no default; the chain ends at the stored profile and a call with nothing configured exits 2. `SKILL.md` additionally called `AGLEDGER_API_URL` "Optional", and it ships inside the tarball as the agent-facing description of this CLI, so that was the copy an agent was most likely to act on.
 
 ### Changed
 
