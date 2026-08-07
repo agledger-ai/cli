@@ -59,7 +59,12 @@ export default class Verify extends BaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(Verify);
 
-    const exportData = this.readJsonSource(args.file, 'audit export') as RecordAuditExportInput;
+    const exportData = this.readJsonSource(
+      args.file,
+      'audit export',
+      'Pass the path to an audit-export JSON file, or `-` to read it from stdin. ' +
+        'Obtain one with `agledger api GET /v1/records/{id}/audit-export`.',
+    ) as RecordAuditExportInput;
     if (!exportData || typeof exportData !== 'object' || !('entries' in exportData)) {
       this.failWith(
         ErrorCode.INVALID_JSON_INPUT,
@@ -70,7 +75,14 @@ export default class Verify extends BaseCommand {
     }
 
     const publicKeys = flags.keys
-      ? this.unwrapKeys(this.readJsonSource(flags.keys, 'public keys'))
+      ? this.unwrapKeys(
+          this.readJsonSource(
+            flags.keys,
+            'public keys',
+            'The --keys file must be a {keyId: SPKI-DER-base64} map or the .data list from ' +
+              '`agledger api GET /v1/verification-keys`.',
+          ),
+        )
       : undefined;
 
     // verify-core throws TypeError at the OOB-key boundary when the file's

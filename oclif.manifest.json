@@ -18,8 +18,8 @@
       "examples": [
         "agledger api GET /health",
         "agledger api GET /v1/records -F status=ACTIVE -F limit=50",
-        "agledger api POST /v1/records --data '{\"type\":\"notarize-generic-v1\",\"criteria\":{\"task_description\":\"...\"}}'",
-        "agledger api POST /v1/records -F type=notarize-generic-v1 -F criteria.task_description=\"summarize Q3 filings\"",
+        "agledger api POST /v1/records --data '{\"type\":\"notarize-generic-v1\",\"criteria\":{\"summary\":\"...\"}}'",
+        "agledger api POST /v1/records -F type=notarize-generic-v1 -F criteria.summary=\"summarize Q3 filings\"",
         "agledger api POST /v1/records --input payload.json",
         "cat payload.json | agledger api POST /v1/records --input -",
         "agledger api GET /v1/records --paginate  # streams all pages as NDJSON"

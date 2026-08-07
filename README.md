@@ -35,13 +35,13 @@ agledger api GET /v1/schemas
 # `criteria` is validated against the JSON Schema you registered for the type.
 agledger api POST /v1/records --data '{
   "type": "notarize-generic-v1",
-  "criteria": { "task_description": "summarize Q3 filings" }
+  "criteria": { "summary": "summarize Q3 filings" }
 }'
 
 # Or build the body with typed fields
 agledger api POST /v1/records \
   -F type=notarize-generic-v1 \
-  -F criteria.task_description='summarize Q3 filings'
+  -F criteria.summary='summarize Q3 filings'
 
 # Submit a completion. On a gated record the principal then renders a Verdict
 # (accept / reject) on the Completion; use the route documented in the API
@@ -74,7 +74,7 @@ Merging order (low → high): `--data` → `--input` → `-F` → `--query`. Lat
 - `--dry-run` on `agledger api` shows the request without sending
 - `--paginate` on GET follows cursor pagination and streams NDJSON
 - Structured errors on stderr: `{error: true, code, message, suggestion, ...}`; API errors pass through verbatim
-- Semantic exit codes: 0 (OK), 2 (usage), 3 (auth), 4 (forbidden), 5 (not found), 6 (conflict), 7 (rate limit), 8 (server), 9 (network), 10 (timeout)
+- Semantic exit codes: 0 (OK), 1 (general), 2 (usage), 3 (auth), 4 (forbidden), 5 (not found), 6 (conflict), 7 (rate limit), 8 (server), 9 (network), 10 (timeout). **1 is the catch-all**: an API error whose status maps to nothing more specific (a 400, for example) exits 1, as does a chain that fails `agledger verify`. Read the `code` field on stderr to tell them apart, and treat any non-zero as failure rather than keying on 1 alone.
 - `NO_COLOR` supported per [no-color.org](https://no-color.org)
 
 ## Discovery
