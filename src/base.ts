@@ -37,6 +37,9 @@ export const ExitCode = {
  */
 export const ErrorCode = {
   AUTH_REQUIRED: 'AUTH_REQUIRED',
+  /** Required configuration (currently the API URL) is absent. Exits as a
+   *  usage error rather than claiming a new exit code. */
+  CONFIG_ERROR: 'CONFIG_ERROR',
   COMMAND_NOT_FOUND: 'COMMAND_NOT_FOUND',
   MISSING_INPUT: 'MISSING_INPUT',
   INVALID_JSON_INPUT: 'INVALID_JSON_INPUT',
@@ -49,7 +52,36 @@ export const ErrorCode = {
   UNKNOWN_ERROR: 'UNKNOWN_ERROR',
 } as const;
 
+/**
+ * Discovery surfaces the Server answers without an Authorization header. A
+ * keyless `agledger api GET /health` was refused client-side before any request
+ * was made, so an agent holding only a URL had to shell out to curl for exactly
+ * the bootstrap arc the product optimizes for (agents#104).
+ *
+ * Read-only by construction: only GET qualifies, so this can never wave through
+ * a write. Anything not listed still requires a key, and the Server remains the
+ * authority: a path that starts requiring auth simply answers 401.
+ */
+const PUBLIC_GET_PATHS = new Set([
+  '/health',
+  '/llms.txt',
+  '/llms-full.txt',
+  '/openapi.json',
+  '/docs',
+  '/v1/conformance',
+]);
+
+function isPublicPath(method: string, path: string): boolean {
+  if (method.toUpperCase() !== 'GET') return false;
+  const bare = (path.split('?')[0] ?? path).replace(/\/+$/, '') || '/';
+  return PUBLIC_GET_PATHS.has(bare) || bare.startsWith('/.well-known/');
+}
+
 export abstract class BaseCommand extends Command {
+  /** The URL the most recent client was built for, so a network failure can
+   *  name the host it actually tried (agents#105). */
+  private lastApiUrl?: string;
+
   static baseFlags = {
     json: Flags.boolean({ description: 'Force JSON output (default when stdout is piped)', default: false }),
     quiet: Flags.boolean({ description: 'Suppress output (exit code only)', default: false }),
@@ -80,7 +112,10 @@ export abstract class BaseCommand extends Command {
    * (both of which outrank the profile). When absent, fall back to the selected
    * profile (`--profile <name>`, else the active profile) in ~/.agledger/config.json.
    */
-  protected createApiClient(flags: { 'api-key'?: string; 'api-url'?: string; profile?: string }): ApiClient {
+  protected createApiClient(
+    flags: { 'api-key'?: string; 'api-url'?: string; profile?: string },
+    options?: { allowAnonymous?: boolean },
+  ): ApiClient {
     const config = readConfig();
     const profileName = flags.profile ?? config.activeProfile;
     const profile = profileName ? config.profiles[profileName] : undefined;
@@ -102,8 +137,11 @@ export abstract class BaseCommand extends Command {
       );
     }
 
-    const apiKey = flagKey ?? profile?.apiKey;
-    if (!apiKey) {
+    const apiKey = flagKey ?? profile?.apiKey ?? null;
+    // Discovery surfaces answer without auth, so a keyless invocation proceeds
+    // anonymously rather than being refused before any request is made. The
+    // Server, not the CLI, decides what needs a key (agents#104).
+    if (!apiKey && !options?.allowAnonymous) {
       this.failWith(
         ErrorCode.AUTH_REQUIRED,
         'No API key. Set AGLEDGER_API_KEY, use --api-key, or run `agledger login`.',
@@ -111,8 +149,21 @@ export abstract class BaseCommand extends Command {
       );
     }
 
-    const apiUrl = flagUrl ?? profile?.apiUrl ?? 'https://agledger.example.com';
-    return new ApiClient(apiUrl, apiKey!, this.config.version);
+    // No placeholder: a default of agledger.example.com resolved nowhere and
+    // turned a missing config into a DNS failure the user could not read
+    // (agents#105). Every deployment is self-hosted, so there is no sane default.
+    const apiUrl = flagUrl ?? profile?.apiUrl;
+    if (!apiUrl) {
+      this.failWith(
+        ErrorCode.CONFIG_ERROR,
+        'No API URL configured. AGLedger is self-hosted, so there is no default server to call.',
+        ExitCode.USAGE_ERROR,
+        'Pass --api-url <url>, set AGLEDGER_API_URL, or run `agledger login --api-url <url> --api-key <key>`.',
+      );
+    }
+
+    this.lastApiUrl = apiUrl;
+    return new ApiClient(apiUrl, apiKey, this.config.version);
   }
 
   /**
@@ -156,7 +207,7 @@ export abstract class BaseCommand extends Command {
     path: string,
     options?: { query?: Record<string, unknown>; body?: unknown },
   ): Promise<ApiResponse> {
-    const client = this.createApiClient(flags);
+    const client = this.createApiClient(flags, { allowAnonymous: isPublicPath(method, path) });
     return client.request(method, path, options);
   }
 
@@ -186,8 +237,14 @@ export abstract class BaseCommand extends Command {
     this.output(payload);
   }
 
-  /** Parse JSON with structured error on failure. Use for any user-supplied JSON input. */
-  protected parseJsonInput(source: string, fieldName: string): unknown {
+  /**
+   * Parse JSON with structured error on failure. Use for any user-supplied JSON input.
+   *
+   * `suggestion` is overridable because the default names `--data` and
+   * `--input`, which only the `api` command has. `verify` was handing users
+   * recovery advice for flags it does not accept (agents#107).
+   */
+  protected parseJsonInput(source: string, fieldName: string, suggestion?: string): unknown {
     try {
       return JSON.parse(source);
     } catch (err) {
@@ -196,14 +253,15 @@ export abstract class BaseCommand extends Command {
         ErrorCode.INVALID_JSON_INPUT,
         `${fieldName} is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
         ExitCode.USAGE_ERROR,
-        'Check that the JSON is properly quoted. For complex payloads, use --input <file> instead of --data.',
+        suggestion ??
+          'Check that the JSON is properly quoted. For complex payloads, use --input <file> instead of --data.',
       );
       throw new Error('unreachable');
     }
   }
 
   /** Read and parse a JSON file with structured errors. `-` reads from stdin. */
-  protected readJsonSource(path: string, fieldName: string): unknown {
+  protected readJsonSource(path: string, fieldName: string, suggestion?: string): unknown {
     let content: string;
     try {
       if (path === '-') {
@@ -216,11 +274,13 @@ export abstract class BaseCommand extends Command {
         ErrorCode.FILE_READ_ERROR,
         `Cannot read ${fieldName} at ${path === '-' ? 'stdin' : path}: ${err instanceof Error ? err.message : String(err)}`,
         ExitCode.USAGE_ERROR,
-        'Check that the path exists and is readable, or pipe JSON to stdin with --input -.',
+        // Same reason the parse suggestion is overridable: the default names
+        // --input, which only the `api` command has (agents#107).
+        suggestion ?? 'Check that the path exists and is readable, or pipe JSON to stdin with --input -.',
       );
       throw new Error('unreachable');
     }
-    return this.parseJsonInput(content, path === '-' ? 'stdin' : `${fieldName} ${path}`);
+    return this.parseJsonInput(content, path === '-' ? 'stdin' : `${fieldName} ${path}`, suggestion);
   }
 
   protected failWith(code: string, message: string, exitCode: number, suggestion?: string): never {
@@ -256,11 +316,24 @@ export abstract class BaseCommand extends Command {
       );
     }
     if (err instanceof TypeError && String(err.message).includes('fetch')) {
+      // "fetch failed" is undici's generic message: DNS failure, connection
+      // refused and TLS problems all print identically. Name the host that was
+      // tried and the underlying cause, or the user has nothing to debug from
+      // (agents#105).
+      const cause = (err as { cause?: { code?: unknown; message?: unknown } }).cause;
+      const causeCode = typeof cause?.code === 'string' ? cause.code : undefined;
+      const causeMessage = typeof cause?.message === 'string' ? cause.message : undefined;
+      const target = this.lastApiUrl ? ` connecting to ${this.lastApiUrl}` : '';
+      const detail = causeCode ?? causeMessage;
       this.failWith(
         ErrorCode.NETWORK_ERROR,
-        String(err.message),
+        `${String(err.message)}${target}${detail ? ` (${detail})` : ''}`,
         ExitCode.NETWORK_ERROR,
-        'Check that AGLEDGER_API_URL is correct. Run `agledger discover` to verify connectivity.',
+        causeCode === 'ENOTFOUND'
+          ? 'The host does not resolve. Check the API URL for a typo, and that DNS can see it from here.'
+          : causeCode === 'ECONNREFUSED'
+            ? 'The host resolved but refused the connection. Check the Server is running and the port is right.'
+            : 'Check the API URL and that the Server is reachable from here.',
       );
     }
     this.failWith(

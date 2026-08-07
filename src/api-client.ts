@@ -6,15 +6,24 @@ export interface ApiResponse {
 
 export class ApiClient {
   private readonly apiUrl: string;
-  private readonly apiKey: string;
+  /** Null sends no Authorization header: the Server's discovery surfaces
+   *  (/health, /llms.txt, /openapi.json, /v1/conformance) answer unauthenticated,
+   *  and an agent holding only a URL must be able to reach them (agents#104). */
+  private readonly apiKey: string | null;
   private readonly userAgent: string;
   private readonly timeoutMs: number;
 
-  constructor(apiUrl: string, apiKey: string, version = '0.0.0', timeoutMs = 30_000) {
+  constructor(apiUrl: string, apiKey: string | null, version = '0.0.0', timeoutMs = 30_000) {
     this.apiUrl = apiUrl.replace(/\/+$/, '');
     this.apiKey = apiKey;
     this.userAgent = `agledger-cli/${version}`;
     this.timeoutMs = timeoutMs;
+  }
+
+  /** The base URL requests go to. Surfaced so a network failure can name the
+   *  host it actually tried instead of a bare "fetch failed" (agents#105). */
+  get baseUrl(): string {
+    return this.apiUrl;
   }
 
   async request(
@@ -47,10 +56,13 @@ export class ApiClient {
     }
 
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${this.apiKey}`,
       Accept: 'application/json',
       'User-Agent': this.userAgent,
     };
+
+    if (this.apiKey !== null) {
+      headers.Authorization = `Bearer ${this.apiKey}`;
+    }
 
     if (options?.body !== undefined) {
       headers['Content-Type'] = 'application/json';

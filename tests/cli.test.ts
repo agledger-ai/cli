@@ -352,11 +352,22 @@ describe('agledger api: --dry-run + --quiet', () => {
 // discover / auth
 // ---------------------------------------------------------------------------
 describe('discover + auth', () => {
-  it('discover requires auth', () => {
+  // agents#104: discover says "call this first", so it must not demand a key.
+  // The Server answers /health unauthenticated. What it does need is a URL,
+  // and with neither the failure names the missing URL, not a missing key.
+  it('discover without a key fails on the missing URL, not on auth', () => {
     const result = run('discover --json');
     expect(result.exitCode).not.toBe(0);
     const parsed = parseJson(result);
-    expect(parsed.code).toBe('AUTH_REQUIRED');
+    expect(parsed.code).toBe('CONFIG_ERROR');
+    expect(String(parsed.message)).toContain('No API URL configured');
+  });
+
+  // agents#105: the old default was https://agledger.example.com, so a missing
+  // URL surfaced as a DNS failure against a host the user never named.
+  it('never falls back to a placeholder host', () => {
+    const result = run('discover --json');
+    expect(result.stderr).not.toContain('agledger.example.com');
   });
 
   it('auth with no key returns authenticated:false and exits 0', () => {
@@ -729,4 +740,77 @@ describe('verify command: conformance corpus (manifest-export.json)', () => {
       }
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// agents#104 / #105 / #107: first-run and error-surface contracts
+// ---------------------------------------------------------------------------
+describe('keyless discovery + error surfaces', () => {
+  // agents#104. These paths answer without an Authorization header, so the CLI
+  // must not refuse them client-side. A bogus URL is fine: we assert the
+  // request was attempted (a network failure), never AUTH_REQUIRED.
+  // A closed port on loopback: connects fast and fails with ECONNREFUSED.
+  const unreachable = 'http://127.0.0.1:45999';
+
+  for (const cmd of [
+    'api GET /health',
+    'api GET /llms.txt',
+    'api GET /openapi.json',
+    'api GET /v1/conformance',
+  ]) {
+    it(`\`${cmd}\` is attempted without a key`, () => {
+      const result = run(`${cmd} --json --api-url ${unreachable}`);
+      const parsed = parseJson(result);
+      expect(parsed.code).not.toBe('AUTH_REQUIRED');
+      expect(parsed.code).toBe('NETWORK_ERROR');
+    });
+  }
+
+  it('a write still requires a key', () => {
+    const result = run(`api POST /v1/records --data '{"x":1}' --json --api-url ${unreachable}`);
+    expect(parseJson(result).code).toBe('AUTH_REQUIRED');
+  });
+
+  it('a non-public GET still requires a key', () => {
+    const result = run(`api GET /v1/records --json --api-url ${unreachable}`);
+    expect(parseJson(result).code).toBe('AUTH_REQUIRED');
+  });
+
+  // agents#105. "fetch failed" alone could not distinguish DNS from refusal.
+  it('NETWORK_ERROR names the URL it tried and the cause code', () => {
+    const result = run(`api GET /health --json --api-url ${unreachable}`);
+    const parsed = parseJson(result);
+    expect(String(parsed.message)).toContain(unreachable);
+    expect(String(parsed.message)).toMatch(/ECONNREFUSED|ENOTFOUND|EADDRNOTAVAIL/);
+  });
+
+  // agents#107. verify has neither --data nor --input, so it must not borrow
+  // the api command's recovery text.
+  it('verify does not suggest flags it does not have', () => {
+    const result = run('verify /nonexistent-path-for-test.json --json');
+    expect(result.exitCode).not.toBe(0);
+    const suggestion = String(parseJson(result).suggestion ?? '');
+    expect(suggestion).not.toContain('--data');
+    expect(suggestion).not.toContain('--input');
+  });
+
+  it('verify does not suggest api-only flags on malformed JSON either', () => {
+    const bad = tmpJson('not-an-export');
+    writeFileSync(bad, '{ this is not json');
+    const result = run(`verify ${bad} --json`);
+    expect(result.exitCode).not.toBe(0);
+    const suggestion = String(parseJson(result).suggestion ?? '');
+    expect(suggestion).not.toContain('--data');
+    expect(suggestion).not.toContain('--input');
+  });
+
+  // agents#107. An unknown verb gave no nearest match and no way forward.
+  it('an unknown command suggests a nearest match and a way forward', () => {
+    const result = run('discovr --json');
+    expect(result.exitCode).toBe(2);
+    const parsed = parseJson(result);
+    expect(parsed.code).toBe('COMMAND_NOT_FOUND');
+    expect(parsed.didYouMean).toBe('discover');
+    expect(String(parsed.suggestion)).toContain('list-commands');
+  });
 });

@@ -47,6 +47,9 @@
       "strategy": "pattern",
       "target": "./dist/commands"
     },
+    "hooks": {
+      "command_not_found": "./dist/hooks/command-not-found.js"
+    },
     "topicSeparator": " "
   },
   "repository": {

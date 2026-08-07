@@ -16,7 +16,9 @@ export default class Discover extends BaseCommand {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Discover);
-    const client = this.createApiClient(flags);
+    // "Call this first" has to be true without a key: /health answers
+    // unauthenticated, and /v1/auth/me simply reports no identity (agents#104).
+    const client = this.createApiClient(flags, { allowAnonymous: true });
 
     const [health, identity] = await Promise.allSettled([
       client.request('GET', '/health'),

@@ -27,7 +27,9 @@ export default class Docs extends BaseCommand {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Docs);
-    const client = this.createApiClient(flags);
+    // llms.txt is served unauthenticated: an agent holding only a URL must be
+    // able to read the narrative before it has a key (agents#104).
+    const client = this.createApiClient(flags, { allowAnonymous: true });
     const path = flags.full ? '/llms-full.txt' : '/llms.txt';
 
     const res = await client.request('GET', path);
