@@ -3,7 +3,9 @@
 Thin cover over the AGLedger API. The CLI passes your call through to the API and forwards the response. No flag-to-body translation, no drift.
 
 ## Setup
-Credentials resolve per command with this precedence: `--api-key` flag > `AGLEDGER_API_KEY` env > stored profile (after `agledger login`). API URL: `--api-url` flag > `AGLEDGER_API_URL` env > stored profile URL > default. Optional: `AGLEDGER_API_URL`.
+Credentials resolve per command with this precedence: `--api-key` flag > `AGLEDGER_API_KEY` env > stored profile (after `agledger login`). API URL: `--api-url` flag > `AGLEDGER_API_URL` env > stored profile URL.
+
+**There is no default API URL, and it is not optional.** AGLedger is self-hosted, so the CLI has no server to guess. If none of those three sources supplies one, the command exits 2 with `CONFIG_ERROR` rather than calling a placeholder host.
 
 ## Primary command: `agledger api`
 Call any API endpoint:
