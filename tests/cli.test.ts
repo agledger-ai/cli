@@ -96,7 +96,7 @@ describe('command surface', () => {
     expect(parsed.flags.query).toBeDefined();
     expect(parsed.flags['dry-run']).toBeDefined();
     expect(parsed.flags.paginate).toBeDefined();
-    // cross-repo #100: the schema must surface the short alias so a doc that
+    // the schema must surface the short alias so a doc that
     // shows `-F key=val` can be verified against help-json. A flag with no
     // short alias omits `char` entirely.
     expect(parsed.flags.field.char).toBe('F');
@@ -352,7 +352,7 @@ describe('agledger api: --dry-run + --quiet', () => {
 // discover / auth
 // ---------------------------------------------------------------------------
 describe('discover + auth', () => {
-  // agents#104: discover says "call this first", so it must not demand a key.
+  // discover says "call this first", so it must not demand a key.
   // The Server answers /health unauthenticated. What it does need is a URL,
   // and with neither the failure names the missing URL, not a missing key.
   it('discover without a key fails on the missing URL, not on auth', () => {
@@ -363,7 +363,7 @@ describe('discover + auth', () => {
     expect(String(parsed.message)).toContain('No API URL configured');
   });
 
-  // agents#105: the old default was https://agledger.example.com, so a missing
+  // the old default was https://agledger.example.com, so a missing
   // URL surfaced as a DNS failure against a host the user never named.
   it('never falls back to a placeholder host', () => {
     const result = run('discover --json');
@@ -377,13 +377,13 @@ describe('discover + auth', () => {
     expect(parsed.authenticated).toBe(false);
   });
 
-  // Regression for cross-repo #94: `auth` used to read only the --api-key
+  // Regression for an earlier report: `auth` used to read only the --api-key
   // flag/env, so right after a successful `login` (which writes the key to a
   // stored profile) it falsely reported authenticated:false. It must now resolve
   // the stored profile and verify it; here the API is unreachable, so the fix is
   // proven by the command getting PAST the key guard (a network error) instead of
   // the old false short-circuit.
-  it('auth resolves a stored profile instead of reporting not-authenticated (#94)', () => {
+  it('auth resolves a stored profile instead of reporting not-authenticated', () => {
     const home = isolatedHome();
     const configDir = join(home, '.agledger');
     mkdirSync(configDir, { recursive: true, mode: 0o700 });
@@ -647,7 +647,7 @@ describe('verify command', () => {
     expect(result.exitCode).toBe(0);
   });
 
-  it('accepts the raw GET /v1/verification-keys envelope shape for --keys (F-732)', () => {
+  it('accepts the raw GET /v1/verification-keys envelope shape for --keys', () => {
     // The endpoint returns `{ data: [{ keyId, publicKey }], ... }`, not a bare
     // array; the CLI must unwrap `.data` so a saved GET response works as the
     // --help text promises, without hand-extracting the array first.
@@ -674,7 +674,7 @@ describe('verify command', () => {
     }
   });
 
-  it('labels the short-circuited signature "not-checked", not "skipped" (F-732)', () => {
+  it('labels the short-circuited signature "not-checked", not "skipped"', () => {
     // On an upstream chain break, downstream entries never reach the signature
     // check; the label must read as a consequence of the break, not a benign skip.
     const result = run(`verify ${VECTORS}/hash-mismatch.json --json`);
@@ -743,10 +743,10 @@ describe('verify command: conformance corpus (manifest-export.json)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// agents#104 / #105 / #107: first-run and error-surface contracts
+// first-run and error-surface contracts
 // ---------------------------------------------------------------------------
 describe('keyless discovery + error surfaces', () => {
-  // agents#104. These paths answer without an Authorization header, so the CLI
+  // These paths answer without an Authorization header, so the CLI
   // must not refuse them client-side. A bogus URL is fine: we assert the
   // request was attempted (a network failure), never AUTH_REQUIRED.
   // A closed port on loopback: connects fast and fails with ECONNREFUSED.
@@ -776,7 +776,7 @@ describe('keyless discovery + error surfaces', () => {
     expect(parseJson(result).code).toBe('AUTH_REQUIRED');
   });
 
-  // agents#105. "fetch failed" alone could not distinguish DNS from refusal.
+  // "fetch failed" alone could not distinguish DNS from refusal.
   it('NETWORK_ERROR names the URL it tried and the cause code', () => {
     const result = run(`api GET /health --json --api-url ${unreachable}`);
     const parsed = parseJson(result);
@@ -784,7 +784,7 @@ describe('keyless discovery + error surfaces', () => {
     expect(String(parsed.message)).toMatch(/ECONNREFUSED|ENOTFOUND|EADDRNOTAVAIL/);
   });
 
-  // agents#107. verify has neither --data nor --input, so it must not borrow
+  // verify has neither --data nor --input, so it must not borrow
   // the api command's recovery text.
   it('verify does not suggest flags it does not have', () => {
     const result = run('verify /nonexistent-path-for-test.json --json');
@@ -804,7 +804,7 @@ describe('keyless discovery + error surfaces', () => {
     expect(suggestion).not.toContain('--input');
   });
 
-  // agents#107. An unknown verb gave no nearest match and no way forward.
+  // An unknown verb gave no nearest match and no way forward.
   it('an unknown command suggests a nearest match and a way forward', () => {
     const result = run('discovr --json');
     expect(result.exitCode).toBe(2);
@@ -819,8 +819,8 @@ describe('keyless discovery + error surfaces', () => {
 // --dry-run must describe the call the CLI would actually make
 // ---------------------------------------------------------------------------
 describe('--dry-run reports the real resolved URL', () => {
-  // agents#105 removed the agledger.example.com placeholder from
-  // createApiClient, but resolvedAuth kept its own copy. The result was a
+  // The agledger.example.com placeholder was removed from createApiClient,
+  // but resolvedAuth kept its own copy. The result was a
   // dry run that reported a host the real call refuses to use: --dry-run
   // printed apiUrl agledger.example.com and exited 0, while the identical
   // invocation without --dry-run exited 2 with CONFIG_ERROR.

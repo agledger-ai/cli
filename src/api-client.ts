@@ -44,7 +44,7 @@ export class ApiClient {
   private readonly apiUrl: string;
   /** Null sends no Authorization header: the Server's discovery surfaces
    *  (/health, /llms.txt, /openapi.json, /v1/conformance) answer unauthenticated,
-   *  and an agent holding only a URL must be able to reach them (agents#104). */
+   *  and an agent holding only a URL must be able to reach them. */
   private readonly apiKey: string | null;
   private readonly userAgent: string;
   private readonly timeoutMs: number;
@@ -57,7 +57,7 @@ export class ApiClient {
   }
 
   /** The base URL requests go to. Surfaced so a network failure can name the
-   *  host it actually tried instead of a bare "fetch failed" (agents#105). */
+   *  host it actually tried instead of a bare "fetch failed". */
   get baseUrl(): string {
     return this.apiUrl;
   }

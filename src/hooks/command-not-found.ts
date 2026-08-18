@@ -2,7 +2,7 @@ import type { Hook } from '@oclif/core';
 
 /**
  * Unknown commands printed only "command X not found", with no nearest match
- * and no pointer to how to find the real one (agents#107). An agent that
+ * and no pointer to how to find the real one. An agent that
  * guessed a verb had nothing to recover from, which matters here because the
  * CLI deliberately has few commands: almost everything goes through
  * `agledger api`, and a wrong guess is the expected first move.
