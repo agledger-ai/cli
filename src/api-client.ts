@@ -4,6 +4,42 @@ export interface ApiResponse {
   ok: boolean;
 }
 
+/**
+ * Serialize one query parameter.
+ *
+ * A plain object becomes the API's bracket notation (`metadata[key]=value`),
+ * which is what the `criteria` and `metadata` filters on
+ * GET /v1/records/search expect. Running it through `String(value)` instead
+ * sent the literal `[object Object]`, so every such filter returned 400.
+ *
+ * A Date becomes ISO-8601 rather than the JS locale form, which the date-time
+ * query params reject.
+ */
+function appendQueryParam(search: URLSearchParams, key: string, value: unknown): void {
+  if (value instanceof Date) {
+    search.set(key, value.toISOString());
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (item === undefined || item === null) continue;
+      search.append(key, item instanceof Date ? item.toISOString() : String(item));
+    }
+    return;
+  }
+  if (typeof value === 'object') {
+    for (const [sub, subValue] of Object.entries(value as Record<string, unknown>)) {
+      if (subValue === undefined || subValue === null) continue;
+      search.set(
+        `${key}[${sub}]`,
+        subValue instanceof Date ? subValue.toISOString() : String(subValue),
+      );
+    }
+    return;
+  }
+  search.set(key, String(value));
+}
+
 export class ApiClient {
   private readonly apiUrl: string;
   /** Null sends no Authorization header: the Server's discovery surfaces
@@ -50,7 +86,7 @@ export class ApiClient {
     if (options?.query) {
       for (const [k, v] of Object.entries(options.query)) {
         if (v !== undefined && v !== null) {
-          url.searchParams.set(k, String(v));
+          appendQueryParam(url.searchParams, k, v);
         }
       }
     }
