@@ -56,7 +56,7 @@ export const ErrorCode = {
  * Discovery surfaces the Server answers without an Authorization header. A
  * keyless `agledger api GET /health` was refused client-side before any request
  * was made, so an agent holding only a URL had to shell out to curl for exactly
- * the bootstrap arc the product optimizes for (agents#104).
+ * the bootstrap arc the product optimizes for.
  *
  * Read-only by construction: only GET qualifies, so this can never wave through
  * a write. Anything not listed still requires a key, and the Server remains the
@@ -79,7 +79,7 @@ function isPublicPath(method: string, path: string): boolean {
 
 export abstract class BaseCommand extends Command {
   /** The URL the most recent client was built for, so a network failure can
-   *  name the host it actually tried (agents#105). */
+   *  name the host it actually tried. */
   private lastApiUrl?: string;
 
   static baseFlags = {
@@ -106,7 +106,7 @@ export abstract class BaseCommand extends Command {
    * Precedence:
    *   API key: `--api-key` flag > `AGLEDGER_API_KEY` env > stored profile.
    *   API URL: `--api-url` flag > `AGLEDGER_API_URL` env > stored profile url.
-   *            There is no default; AGLedger is self-hosted (agents#105).
+   *            There is no default; AGLedger is self-hosted.
    *
    * oclif merges the flag and its `env` source into `flags['api-key']` /
    * `flags['api-url']`, so a present value there already represents flag-or-env
@@ -141,7 +141,7 @@ export abstract class BaseCommand extends Command {
     const apiKey = flagKey ?? profile?.apiKey ?? null;
     // Discovery surfaces answer without auth, so a keyless invocation proceeds
     // anonymously rather than being refused before any request is made. The
-    // Server, not the CLI, decides what needs a key (agents#104).
+    // Server, not the CLI, decides what needs a key.
     if (!apiKey && !options?.allowAnonymous) {
       this.failWith(
         ErrorCode.AUTH_REQUIRED,
@@ -151,8 +151,8 @@ export abstract class BaseCommand extends Command {
     }
 
     // No placeholder: a default of agledger.example.com resolved nowhere and
-    // turned a missing config into a DNS failure the user could not read
-    // (agents#105). Every deployment is self-hosted, so there is no sane default.
+    // turned a missing config into a DNS failure the user could not read.
+    // Every deployment is self-hosted, so there is no sane default.
     const apiUrl = flagUrl ?? profile?.apiUrl;
     if (!apiUrl) {
       this.failWith(
@@ -188,7 +188,7 @@ export abstract class BaseCommand extends Command {
     const flagUrl = flags['api-url'] || undefined;
     const apiKey = flagKey ?? profile?.apiKey ?? null;
     const source = flagKey ? 'flag-or-env' : profile?.apiKey ? 'profile' : 'none';
-    // Null, not a placeholder. agents#105 removed `agledger.example.com` from
+    // Null, not a placeholder. `agledger.example.com` was removed from
     // `createApiClient`, which now refuses to build a client without a URL, but
     // this sibling kept it. The whole job of --dry-run is to report what the
     // real call would do, and it was reporting a host the real call refuses to
@@ -258,7 +258,7 @@ export abstract class BaseCommand extends Command {
    *
    * `suggestion` is overridable because the default names `--data` and
    * `--input`, which only the `api` command has. `verify` was handing users
-   * recovery advice for flags it does not accept (agents#107).
+   * recovery advice for flags it does not accept.
    */
   protected parseJsonInput(source: string, fieldName: string, suggestion?: string): unknown {
     try {
@@ -291,7 +291,7 @@ export abstract class BaseCommand extends Command {
         `Cannot read ${fieldName} at ${path === '-' ? 'stdin' : path}: ${err instanceof Error ? err.message : String(err)}`,
         ExitCode.USAGE_ERROR,
         // Same reason the parse suggestion is overridable: the default names
-        // --input, which only the `api` command has (agents#107).
+        // --input, which only the `api` command has.
         suggestion ?? 'Check that the path exists and is readable, or pipe JSON to stdin with --input -.',
       );
       throw new Error('unreachable');
@@ -334,8 +334,7 @@ export abstract class BaseCommand extends Command {
     if (err instanceof TypeError && String(err.message).includes('fetch')) {
       // "fetch failed" is undici's generic message: DNS failure, connection
       // refused and TLS problems all print identically. Name the host that was
-      // tried and the underlying cause, or the user has nothing to debug from
-      // (agents#105).
+      // tried and the underlying cause, or the user has nothing to debug from.
       const cause = (err as { cause?: { code?: unknown; message?: unknown } }).cause;
       const causeCode = typeof cause?.code === 'string' ? cause.code : undefined;
       const causeMessage = typeof cause?.message === 'string' ? cause.message : undefined;

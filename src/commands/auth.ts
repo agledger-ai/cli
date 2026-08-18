@@ -16,7 +16,7 @@ export default class Auth extends BaseCommand {
     // Resolve the key the same way an actual call does: --api-key flag > env >
     // stored profile in ~/.agledger/config.json. The previous check looked only
     // at the flag/env, so `agledger auth` reported not-authenticated right after
-    // a successful `login` wrote the key to a profile (cross-repo #94).
+    // a successful `login` wrote the key to a profile.
     const auth = this.resolvedAuth(flags);
     if (auth.source === 'none') {
       this.output({ authenticated: false, message: 'No API key configured. Run `agledger login --api-key <key>`.' });

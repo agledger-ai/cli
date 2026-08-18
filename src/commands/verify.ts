@@ -123,7 +123,7 @@ export default class Verify extends BaseCommand {
    * Accept the raw `GET /v1/verification-keys` response shape. That endpoint
    * returns an envelope `{ data: [{ keyId, publicKey, ... }], canonicalization, ... }`,
    * not the bare array its consumers expect, so unwrap `.data` so a file saved
-   * straight from the endpoint verifies without hand-editing (F-732). A bare
+   * straight from the endpoint verifies without hand-editing. A bare
    * `[{keyId, publicKey}]` list or a `{keyId: base64}` map passes through
    * untouched; verify-core then validates the shape and throws on anything else.
    */
