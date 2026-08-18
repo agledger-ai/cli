@@ -9,7 +9,7 @@ import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
 
 /**
  * Offline verification of a record audit export (format 2.0, COSE_Sign1).
- * Runs entirely offline — no network calls, no API key required. The
+ * Runs entirely offline: no network calls, no API key required. The
  * verification core is `@agledger/verify-core` (one dep, no network), shared
  * with the SDK, MCP server, and `@agledger/verify`; parity with the independent
  * Python port is enforced via the shared conformance corpus.
@@ -88,7 +88,7 @@ export default class Verify extends BaseCommand {
     // verify-core throws TypeError at the OOB-key boundary when the file's
     // shape is wrong (e.g. {keyId: 42}, [null], "..."). Catch it so the CLI
     // emits its structured-error envelope rather than oclif's raw exception
-    // trace — agents parsing stderr need {code, message, suggestion}, not a
+    // trace; agents parsing stderr need {code, message, suggestion}, not a
     // stack frame. See verify-core/audit-export.ts normalizeOutOfBandKeys.
     let result: VerifyExportResult;
     try {
@@ -122,7 +122,7 @@ export default class Verify extends BaseCommand {
   /**
    * Accept the raw `GET /v1/verification-keys` response shape. That endpoint
    * returns an envelope `{ data: [{ keyId, publicKey, ... }], canonicalization, ... }`,
-   * not the bare array its consumers expect — unwrap `.data` so a file saved
+   * not the bare array its consumers expect, so unwrap `.data` so a file saved
    * straight from the endpoint verifies without hand-editing (F-732). A bare
    * `[{keyId, publicKey}]` list or a `{keyId: base64}` map passes through
    * untouched; verify-core then validates the shape and throws on anything else.

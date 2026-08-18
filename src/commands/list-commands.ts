@@ -3,7 +3,7 @@ import { BaseCommand } from '../base.js';
 /**
  * Low-token command inventory for agent discovery.
  *
- * The CLI is a thin cover over the API — the bulk of functionality lives under
+ * The CLI is a thin cover over the API; the bulk of functionality lives under
  * `agledger api <METHOD> <path>`. This list shows CLI-local commands only;
  * for API operations, agents should call `agledger discover` or
  * `agledger api GET /openapi.json`.

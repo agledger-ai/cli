@@ -70,7 +70,7 @@ export class ApiClient {
       body?: unknown;
     },
   ): Promise<ApiResponse> {
-    // Reject protocol-relative paths ("//host/...") — with `new URL` they would
+    // Reject protocol-relative paths ("//host/...") because with `new URL` they would
     // be resolved against the base's protocol and silently retarget the request
     // to an attacker-controlled host. A legitimate API path starts with a single
     // "/". Callers (api.ts) guarantee a leading slash.

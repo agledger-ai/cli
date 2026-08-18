@@ -1,7 +1,7 @@
 import { BaseCommand } from '../base.js';
 
 /**
- * Quick "am I logged in?" check. Local-first — returns `authenticated: false`
+ * Quick "am I logged in?" check. Local-first: returns `authenticated: false`
  * with exit 0 when no key is configured (useful for scripts gating on login state).
  * When a key is configured, verifies it against the API via GET /v1/auth/me.
  */

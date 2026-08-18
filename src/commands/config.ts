@@ -5,7 +5,7 @@ import { configPath, readConfig, writeConfig } from '../util/config.js';
 /**
  * Inspect and switch between stored profiles in ~/.agledger/config.json.
  *
- * Does NOT accept setting an API key directly — use `agledger login --api-key X
+ * Does NOT accept setting an API key directly; use `agledger login --api-key X
  * --profile name` for that (login also verifies the key against the API first).
  */
 export default class Config extends BaseCommand {

@@ -8,7 +8,7 @@ const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
  * Universal pass-through to the AGLedger API.
  *
  * Design principle: the CLI is a thin cover over the API. This command supports
- * every route the API exposes with zero drift — no hand-coded flag-to-body mapping.
+ * every route the API exposes with zero drift, and no hand-coded flag-to-body mapping.
  *
  * Params go to query string for GET/DELETE, to JSON body for POST/PUT/PATCH.
  * Body sources compose in order: --data (raw JSON) → --input @file / stdin → -F fields.

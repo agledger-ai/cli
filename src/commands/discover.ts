@@ -2,11 +2,11 @@ import { BaseCommand } from '../base.js';
 
 /**
  * Cold-start discovery for agents and humans. Mirrors the MCP server's
- * `agledger_discover` tool — same shape, same quickstart.
+ * `agledger_discover` tool: same shape, same quickstart.
  *
  * Returns health, identity, scopes, a 4-step quickstart workflow, and a pointer
  * to live API discovery (OpenAPI). Failures on either call don't
- * abort — partial results are returned so agents can reason about what's reachable.
+ * abort; partial results are returned so agents can reason about what's reachable.
  */
 export default class Discover extends BaseCommand {
   static override description =
