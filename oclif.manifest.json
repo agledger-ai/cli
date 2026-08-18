@@ -95,6 +95,13 @@
           "allowNo": false,
           "type": "boolean"
         },
+        "idempotency-key": {
+          "description": "Dedup key for POST, max 256 chars. One is generated per call, so pass this only when retrying a call that may already have reached the Server: reuse the first attempt's key and it replays the original result instead of creating a second record. Bound to method, route and body, so a retry with a changed body is rejected.",
+          "name": "idempotency-key",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
         "dry-run": {
           "description": "Show the request that would be sent without calling the API.",
           "name": "dry-run",
@@ -702,5 +709,5 @@
       ]
     }
   },
-  "version": "1.3.2"
+  "version": "1.4.0"
 }

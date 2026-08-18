@@ -68,6 +68,7 @@ export class ApiClient {
     options?: {
       query?: Record<string, unknown>;
       body?: unknown;
+      idempotencyKey?: string;
     },
   ): Promise<ApiResponse> {
     // Reject protocol-relative paths ("//host/...") because with `new URL` they would
@@ -102,6 +103,15 @@ export class ApiClient {
 
     if (options?.body !== undefined) {
       headers['Content-Type'] = 'application/json';
+    }
+
+    // POST is the only method the API arms for idempotency: all 18 routes that
+    // declare `idempotent: true` are POST, and on any other method the header is
+    // ignored. A generated key makes the CLI's own writes replay-safe by default;
+    // a caller retrying the same logical operation across processes passes its
+    // own key so the second attempt dedups instead of creating a second record.
+    if (method.toUpperCase() === 'POST') {
+      headers['Idempotency-Key'] = options?.idempotencyKey ?? crypto.randomUUID();
     }
 
     const controller = new AbortController();

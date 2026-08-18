@@ -4,7 +4,11 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.3.2] - 2026-08-17
+## [1.4.0] - 2026-08-18
+
+### Added
+
+- **`--idempotency-key` on `agledger api`, and a generated key on every POST.** The CLI could not send an `Idempotency-Key` at all, so a write retried after a timeout or a dropped connection created a second record rather than replaying the first. Every POST now carries a generated key, which makes a single invocation replay-safe on its own. Pass `--idempotency-key` to reuse the first attempt's key when you are retrying a call that may already have reached the Server: the Server returns the original result instead of recording the work twice. The key binds to method, route and body, so a retry that changes the body is rejected rather than silently replaying the old response. Scoped to POST because that is what the engine arms: all 18 routes that opt into idempotency are POST, and the header is ignored elsewhere. `--dry-run` names the key it would send.
 
 ### Fixed
 

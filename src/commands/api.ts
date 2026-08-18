@@ -60,6 +60,10 @@ export default class Api extends BaseCommand {
       description: 'Follow cursor pagination, stream all results as NDJSON. Requires GET on a paginated route.',
       default: false,
     }),
+    'idempotency-key': Flags.string({
+      description:
+        'Dedup key for POST, max 256 chars. One is generated per call, so pass this only when retrying a call that may already have reached the Server: reuse the first attempt\'s key and it replays the original result instead of creating a second record. Bound to method, route and body, so a retry with a changed body is rejected.',
+    }),
     'dry-run': Flags.boolean({
       description: 'Show the request that would be sent without calling the API.',
       default: false,
@@ -114,7 +118,14 @@ export default class Api extends BaseCommand {
         return;
       }
 
-      const options: { query?: Record<string, unknown>; body?: unknown } = {};
+      const options: {
+        query?: Record<string, unknown>;
+        body?: unknown;
+        idempotencyKey?: string;
+      } = {};
+      if (flags['idempotency-key'] !== undefined) {
+        options.idempotencyKey = flags['idempotency-key'];
+      }
       if (params !== undefined) {
         if (method === 'GET' || method === 'DELETE') {
           options.query = params as Record<string, unknown>;
@@ -125,7 +136,17 @@ export default class Api extends BaseCommand {
 
       if (flags['dry-run']) {
         this.dryRunOutput(
-          { method, path: args.path, ...options, auth: this.resolvedAuth(flags) },
+          {
+            method,
+            path: args.path,
+            ...options,
+            // A generated key is minted inside the client at send time, so
+            // printing a concrete UUID here would name one that never ships.
+            ...(method === 'POST' && options.idempotencyKey === undefined
+              ? { idempotencyKey: '<generated at send time>' }
+              : {}),
+            auth: this.resolvedAuth(flags),
+          },
           `would call ${method} ${args.path}`,
         );
         return;

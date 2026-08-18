@@ -221,7 +221,7 @@ export abstract class BaseCommand extends Command {
     flags: { 'api-key'?: string; 'api-url'?: string; profile?: string },
     method: string,
     path: string,
-    options?: { query?: Record<string, unknown>; body?: unknown },
+    options?: { query?: Record<string, unknown>; body?: unknown; idempotencyKey?: string },
   ): Promise<ApiResponse> {
     const client = this.createApiClient(flags, { allowAnonymous: isPublicPath(method, path) });
     return client.request(method, path, options);

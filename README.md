@@ -73,6 +73,7 @@ Merging order (low → high): `--data` → `--input` → `-F` → `--query`. Lat
 - `--quiet` suppresses output (exit code only)
 - `--dry-run` on `agledger api` shows the request without sending
 - `--paginate` on GET follows cursor pagination and streams NDJSON
+- Every POST carries a generated `Idempotency-Key`, so one invocation is replay-safe on its own. Retrying a call that may already have reached the Server? Pass `--idempotency-key` with the first attempt's key and the Server replays the original result instead of recording the work twice
 - Structured errors on stderr: `{error: true, code, message, suggestion, ...}`; API errors pass through verbatim
 - Semantic exit codes: 0 (OK), 1 (general), 2 (usage), 3 (auth), 4 (forbidden), 5 (not found), 6 (conflict), 7 (rate limit), 8 (server), 9 (network), 10 (timeout). **1 is the catch-all**: an API error whose status maps to nothing more specific (a 400, for example) exits 1, as does a chain that fails `agledger verify`. Read the `code` field on stderr to tell them apart, and treat any non-zero as failure rather than keying on 1 alone.
 - `NO_COLOR` supported per [no-color.org](https://no-color.org)
