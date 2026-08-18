@@ -4,7 +4,7 @@ import { BaseCommand } from '../base.js';
 /**
  * Fetch the API's agent-oriented documentation narrative. The API serves a
  * concise `/llms.txt` and an expanded `/llms-full.txt` (the llms.txt
- * convention) — `discover` only points at `openapi.json`, so this closes the
+ * convention); `discover` only points at `openapi.json`, so this closes the
  * loop for an agent that wants the prose narrative without reaching for curl.
  */
 export default class Docs extends BaseCommand {

@@ -1,12 +1,12 @@
 /**
- * AGLedger CLI — Base command with dual-mode output, auth, and error forwarding.
- * The CLI is a thin pass-through over the API — this base exists to make that
+ * AGLedger CLI: base command with dual-mode output, auth, and error forwarding.
+ * The CLI is a thin pass-through over the API; this base exists to make that
  * pass-through consistent (same exit codes, same error shape, same output modes).
  *
  * NO_COLOR (no-color.org): the CLI emits plain JSON to both stdout (results)
  * and stderr (errors) with no ANSI escapes of its own, so it is trivially
  * NO_COLOR-conformant by construction. oclif's own help/error rendering also
- * honors NO_COLOR via chalk's built-in detection — no explicit check needed.
+ * honors NO_COLOR via chalk's built-in detection, so no explicit check needed.
  */
 
 import { readFileSync } from 'node:fs';
@@ -104,7 +104,7 @@ export abstract class BaseCommand extends Command {
    * Resolve credentials and build the API client.
    *
    * Precedence:
-   *   API key  — `--api-key` flag > `AGLEDGER_API_KEY` env > stored profile.
+   *   API key: `--api-key` flag > `AGLEDGER_API_KEY` env > stored profile.
    *   API URL: `--api-url` flag > `AGLEDGER_API_URL` env > stored profile url.
    *            There is no default; AGLedger is self-hosted (agents#105).
    *
@@ -214,7 +214,7 @@ export abstract class BaseCommand extends Command {
   }
 
   /**
-   * Call the API. Path is passed through as-is — caller provides the full path
+   * Call the API. Path is passed through as-is; caller provides the full path
    * (e.g. `/v1/records`, `/health`, `/federation/v1/peer`). No auto-prefixing.
    */
   protected async callApi(

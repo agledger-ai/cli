@@ -1,5 +1,5 @@
 /**
- * AGLedger CLI — Thin-cover integration tests.
+ * AGLedger CLI: thin-cover integration tests.
  *
  * The CLI is a pass-through over the API. These tests validate:
  *  - Surface: list-commands + help-json report the 10 CLI-local commands
@@ -8,7 +8,7 @@
  *  - `discover`, `login`, `auth`, `logout`, `config`: CLI-local behaviors
  *  - Exit codes, --quiet, --json, NO_COLOR
  *
- * No real API calls — all paths that would hit the network either dry-run or
+ * No real API calls: all paths that would hit the network either dry-run or
  * fail early on missing auth.
  */
 
@@ -59,7 +59,7 @@ const tmpJson = (data: unknown): string => {
 const isolatedHome = (): string => mkdtempSync(join(tmpdir(), 'cli-home-'));
 
 // ---------------------------------------------------------------------------
-// Discovery — the whole CLI surface
+// Discovery: the whole CLI surface
 // ---------------------------------------------------------------------------
 describe('command surface', () => {
   it('list-commands returns 10 CLI-local commands', () => {
@@ -121,7 +121,7 @@ describe('command surface', () => {
 });
 
 // ---------------------------------------------------------------------------
-// `agledger api` — the main event
+// `agledger api`: the main event
 // ---------------------------------------------------------------------------
 describe('agledger api: method + path validation', () => {
   it('rejects unknown method', () => {
@@ -160,14 +160,14 @@ describe('agledger api: method + path validation', () => {
     expect(parsed.code).toBe('AUTH_REQUIRED');
   });
 
-  it('does NOT auto-prefix /v1/ — health path passes through', () => {
+  it('does NOT auto-prefix /v1/: health path passes through', () => {
     const result = run('api GET /health --dry-run --json', { AGLEDGER_API_KEY: 'agl_adm_test' });
     expect(result.exitCode).toBe(0);
     const parsed = JSON.parse(result.stdout);
     expect(parsed.path).toBe('/health');
   });
 
-  it('does NOT auto-prefix /v1/ — caller keeps /v1/ explicit', () => {
+  it('does NOT auto-prefix /v1/: caller keeps /v1/ explicit', () => {
     const result = run('api GET /v1/records --dry-run --json', { AGLEDGER_API_KEY: 'agl_adm_test' });
     expect(result.exitCode).toBe(0);
     const parsed = JSON.parse(result.stdout);
@@ -380,7 +380,7 @@ describe('discover + auth', () => {
   // Regression for cross-repo #94: `auth` used to read only the --api-key
   // flag/env, so right after a successful `login` (which writes the key to a
   // stored profile) it falsely reported authenticated:false. It must now resolve
-  // the stored profile and verify it — here the API is unreachable, so the fix is
+  // the stored profile and verify it; here the API is unreachable, so the fix is
   // proven by the command getting PAST the key guard (a network error) instead of
   // the old false short-circuit.
   it('auth resolves a stored profile instead of reporting not-authenticated (#94)', () => {
@@ -407,7 +407,7 @@ describe('discover + auth', () => {
 });
 
 // ---------------------------------------------------------------------------
-// login + logout + config — CLI-local
+// login + logout + config: CLI-local
 // ---------------------------------------------------------------------------
 describe('login + logout + config', () => {
   it('login without --api-key fails', () => {
@@ -601,7 +601,7 @@ describe('error output format', () => {
 });
 
 // ---------------------------------------------------------------------------
-// verify — offline audit-export verification (no network, no API key required)
+// verify: offline audit-export verification (no network, no API key required)
 // ---------------------------------------------------------------------------
 describe('verify command', () => {
   const VECTORS = resolve(import.meta.dirname, '../testdata/conformance/export');
@@ -649,7 +649,7 @@ describe('verify command', () => {
 
   it('accepts the raw GET /v1/verification-keys envelope shape for --keys (F-732)', () => {
     // The endpoint returns `{ data: [{ keyId, publicKey }], ... }`, not a bare
-    // array — the CLI must unwrap `.data` so a saved GET response works as the
+    // array; the CLI must unwrap `.data` so a saved GET response works as the
     // --help text promises, without hand-extracting the array first.
     const map = JSON.parse(readFileSync(`${VECTORS}/keys-oob.json`, 'utf-8')) as Record<
       string,
@@ -676,7 +676,7 @@ describe('verify command', () => {
 
   it('labels the short-circuited signature "not-checked", not "skipped" (F-732)', () => {
     // On an upstream chain break, downstream entries never reach the signature
-    // check — the label must read as a consequence of the break, not a benign skip.
+    // check; the label must read as a consequence of the break, not a benign skip.
     const result = run(`verify ${VECTORS}/hash-mismatch.json --json`);
     expect(result.exitCode).toBe(1);
     const parsed = JSON.parse(result.stdout);

@@ -11,10 +11,10 @@
  * - `items[].name=x`       → { items: [{ name: "x" }] }  (appends new element)
  *
  * Why: dot is nesting, not a literal. The AGLedger API uses camelCase / snake_case
- * throughout and has zero property keys containing '.' — verified by scanning openapi.json.
+ * throughout and has zero property keys containing '.', verified by scanning openapi.json.
  * If the API ever introduces one, we'll need to add an escape syntax (e.g. `a\.b=v`).
  *
- * If no `=` is present, throws — callers decide how to surface the error.
+ * If no `=` is present, throws; callers decide how to surface the error.
  */
 export class FieldParseError extends Error {
   constructor(public readonly field: string, message: string) {
@@ -30,12 +30,12 @@ function coerceValue(raw: string): unknown {
   if (raw === '') return '';
   if (/^-?\d+$/.test(raw)) return Number(raw);
   if (/^-?\d*\.\d+$/.test(raw)) return Number(raw);
-  // JSON literals only if clearly bracketed — avoids misinterpreting strings.
+  // JSON literals only if clearly bracketed, which avoids misinterpreting strings.
   if ((raw.startsWith('{') && raw.endsWith('}')) || (raw.startsWith('[') && raw.endsWith(']'))) {
     try {
       return JSON.parse(raw);
     } catch {
-      // Fall through — treat as string if JSON parse fails.
+      // Fall through: treat as string if JSON parse fails.
     }
   }
   return raw;
@@ -117,7 +117,7 @@ export function parseFields(fields: string[]): Record<string, unknown> {
   for (const field of fields) {
     const eq = field.indexOf('=');
     if (eq === -1) {
-      throw new FieldParseError(field, `missing '=' — use key=value, not just '${field}'`);
+      throw new FieldParseError(field, `missing '=': use key=value, not just '${field}'`);
     }
     const path = field.slice(0, eq);
     const rawValue = field.slice(eq + 1);
