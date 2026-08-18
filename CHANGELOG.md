@@ -4,6 +4,16 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Object query parameters reached the wire as `[object Object]`.** The client ran every query value through `String(value)`, so `agledger api GET /v1/records/search` with a `criteria` or `metadata` filter returned 400 rather than filtering. Objects now expand into the API's bracket notation (`metadata[state]=blocked`), and a `Date` serializes as ISO-8601 rather than the JS locale form the date-time params reject. Found by driving the CLI against a live API.
+
+### Changed
+
+- `@agledger/verify-core` moves to `^1.4.0`. The declared range was `^1.3.0` while the lockfile pinned 1.3.0, so CI tested against a build without the ES256 verification floor while a fresh install resolved 1.4.0. Lockfile refreshed, which also clears a high-severity `nanoid` advisory in the dev tree (vitest -> vite -> postcss; never shipped in the tarball).
+
 ## [1.3.1] - 2026-08-07
 
 ### Fixed
