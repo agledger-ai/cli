@@ -11,7 +11,7 @@ Credentials resolve per command with this precedence: `--api-key` flag > `AGLEDG
 Call any API endpoint:
 
 ```
-agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value ...]
+agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value | -f key=value ...]
 ```
 
 ## Workflow (start here)
@@ -27,6 +27,7 @@ agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value ...]
 - `--input file.json`: read JSON from file
 - `--input -`: read JSON from stdin
 - `-F key=value`: repeatable; types parsed (`true`/`false`/`null`/numbers); nested via `a.b=v`; arrays via `arr[]=v`
+- `-f key=value`: same, value taken verbatim as a string. Required for identifiers that look numeric (`externalTaskId`, `correlationId`, `platformRef`, `projectRef`, `publisher`): the Server does not coerce a JSON body, so `-F externalTaskId=4821` sends a number and is refused. Do not quote around `-F` to work around it; the quote characters land inside the notarized value.
 
 ## Discovery commands
 - `agledger list-commands --json`: full CLI inventory (10 commands)

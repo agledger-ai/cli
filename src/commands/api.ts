@@ -1,6 +1,6 @@
 import { Args, Flags } from '@oclif/core';
 import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
-import { parseFields, FieldParseError } from '../util/field-parser.js';
+import { parseFields, FieldParseError, type FieldInput } from '../util/field-parser.js';
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -11,7 +11,7 @@ const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
  * every route the API exposes with zero drift, and no hand-coded flag-to-body mapping.
  *
  * Params go to query string for GET/DELETE, to JSON body for POST/PUT/PATCH.
- * Body sources compose in order: --data (raw JSON) → --input @file / stdin → -F fields.
+ * Body sources compose in order: --data (raw JSON) → --input @file / stdin → -F/-f fields.
  * If multiple body sources are given, later sources take precedence for overlapping keys.
  */
 export default class Api extends BaseCommand {
@@ -23,6 +23,7 @@ export default class Api extends BaseCommand {
     'agledger api GET /v1/records -F status=ACTIVE -F limit=50',
     'agledger api POST /v1/records --data \'{"type":"notarize-generic-v1","criteria":{"summary":"..."}}\'',
     'agledger api POST /v1/records -F type=notarize-generic-v1 -F criteria.summary="summarize Q3 filings"',
+    'agledger api POST /v1/records -F type=notarize-generic-v1 -f externalTaskId=4821  # -f keeps a digit-only id a string',
     'agledger api POST /v1/records --input payload.json',
     'cat payload.json | agledger api POST /v1/records --input -',
     'agledger api GET /v1/records --paginate  # streams all pages as NDJSON',
@@ -51,7 +52,13 @@ export default class Api extends BaseCommand {
       char: 'F',
       multiple: true,
       description:
-        'Set a field as key=value. Values are typed: true/false/null, numbers, or JSON for {...}/[...]. Supports nested (a.b.c=v) and array append (arr[]=v). Repeatable.',
+        'Set a typed field as key=value: true/false/null, numbers, or JSON for {...}/[...]. Anything else is a string. Use -f for a value that must stay a string, such as an all-digit identifier. Supports nested (a.b.c=v) and array append (arr[]=v). Repeatable.',
+    }),
+    'raw-field': Flags.string({
+      char: 'f',
+      multiple: true,
+      description:
+        'Set a field as key=value, taking the value verbatim as a string. Use this for identifiers that look numeric (externalTaskId, correlationId, platformRef): the Server does not coerce a JSON body, so -F id=4821 sends a number and is refused. Same path syntax as -F. Repeatable.',
     }),
     query: Flags.string({
       description: 'Extra query parameters as JSON. Merges over -F fields and --data for GET/DELETE routing.',
@@ -161,9 +168,9 @@ export default class Api extends BaseCommand {
       if (err instanceof FieldParseError) {
         this.failWith(
           ErrorCode.INVALID_FIELD,
-          `Invalid -F/--field value '${err.field}': ${err.message}`,
+          `Invalid field value '${err.field}': ${err.message}`,
           ExitCode.USAGE_ERROR,
-          'Use key=value. Supported: string, number, true/false/null, JSON objects/arrays. Nested via a.b=v, arrays via arr[]=v.',
+          'Use key=value. -F types the value (number, true/false/null, JSON objects/arrays); -f takes it verbatim as a string. Nested via a.b=v, arrays via arr[]=v.',
         );
       }
       this.handleError(err);
@@ -171,14 +178,15 @@ export default class Api extends BaseCommand {
   }
 
   /**
-   * Merge --data, --input, -F, and --query into a single params object.
-   * Precedence (low → high): --data → --input → -F fields → --query.
+   * Merge --data, --input, -F/-f, and --query into a single params object.
+   * Precedence (low → high): --data → --input → -F/-f fields → --query.
    * Returns undefined if no source provided.
    */
   private composeParams(flags: {
     data?: string;
     input?: string;
     field?: string[];
+    'raw-field'?: string[];
     query?: string;
   }): unknown {
     let body: unknown;
@@ -192,9 +200,16 @@ export default class Api extends BaseCommand {
       body = this.mergeIfObject(body, fromFile);
     }
 
-    if (flags.field && flags.field.length > 0) {
-      const fromFields = parseFields(flags.field);
-      body = this.mergeIfObject(body, fromFields);
+    // -F and -f parse together so their paths build one tree rather than two
+    // objects whose shallow merge would drop a shared branch. On a collision of
+    // the same exact path, -f wins: asking for the value verbatim is the more
+    // specific request.
+    const fieldInputs: FieldInput[] = [
+      ...(flags.field ?? []).map((value) => ({ value, coerce: true })),
+      ...(flags['raw-field'] ?? []).map((value) => ({ value, coerce: false })),
+    ];
+    if (fieldInputs.length > 0) {
+      body = this.mergeIfObject(body, parseFields(fieldInputs));
     }
 
     if (flags.query !== undefined) {
