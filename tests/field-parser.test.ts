@@ -57,4 +57,48 @@ describe('field-parser', () => {
   it('throws when path is empty', () => {
     expect(() => parseFields(['=value'])).toThrow(FieldParseError);
   });
+
+  describe('raw fields (-f)', () => {
+    const raw = (value: string) => ({ value, coerce: false });
+
+    it('keeps a digit-only identifier a string', () => {
+      // The whole point: the Server no longer coerces a JSON body, and these
+      // fields are declared `string`, so -F sends a number and gets a 400.
+      expect(parseFields([raw('externalTaskId=4821')])).toEqual({ externalTaskId: '4821' });
+      expect(parseFields([raw('correlationId=00123')])).toEqual({ correlationId: '00123' });
+    });
+
+    it('does not eat the quote characters, which is what the -F workaround did', () => {
+      // `-F id='"4821"'` reached the Server as a string with the quotes inside
+      // it, which the Server accepts, notarizing a corrupted identifier.
+      expect(parseFields([raw('externalTaskId=4821')])).toEqual({ externalTaskId: '4821' });
+      expect(parseFields([raw('externalTaskId="4821"')])).toEqual({ externalTaskId: '"4821"' });
+    });
+
+    it('takes literals and JSON verbatim too', () => {
+      expect(parseFields([raw('k=true'), raw('n=42'), raw('o={"a":1}')])).toEqual({
+        k: 'true',
+        n: '42',
+        o: '{"a":1}',
+      });
+    });
+
+    it('supports the same path syntax as -F', () => {
+      expect(parseFields([raw('a.b.c=9')])).toEqual({ a: { b: { c: '9' } } });
+      expect(parseFields([raw('arr[]=1'), raw('arr[]=2')])).toEqual({ arr: ['1', '2'] });
+    });
+
+    it('shares one tree with -F on a common branch', () => {
+      // Parsing the two flags separately produced two objects whose shallow
+      // merge dropped one of the `criteria` branches.
+      expect(parseFields(['criteria.count=7', raw('criteria.ref=0042')])).toEqual({
+        criteria: { count: 7, ref: '0042' },
+      });
+    });
+
+    it('still throws on a malformed entry', () => {
+      expect(() => parseFields([raw('broken')])).toThrow(FieldParseError);
+      expect(() => parseFields([raw('=value')])).toThrow(FieldParseError);
+    });
+  });
 });

@@ -38,10 +38,13 @@ agledger api POST /v1/records --data '{
   "criteria": { "summary": "summarize Q3 filings" }
 }'
 
-# Or build the body with typed fields
+# Or build the body with typed fields. Use -f for a value that must stay a
+# string: the Server does not coerce a JSON body, so an all-digit identifier
+# passed with -F is sent as a number and refused.
 agledger api POST /v1/records \
   -F type=notarize-generic-v1 \
-  -F criteria.summary='summarize Q3 filings'
+  -F criteria.summary='summarize Q3 filings' \
+  -f externalTaskId=4821
 
 # Submit a completion. On a gated record the principal then renders a Verdict
 # (accept / reject) on the Completion; use the route documented in the API
@@ -64,8 +67,26 @@ agledger api POST /v1/records/<record-id>/completions \
 | `--input file.json` | Complex payloads; reuse files |
 | `--input -` | Pipe JSON from stdin |
 | `-F key=value` (repeatable) | Shell-friendly; typed (`true`/`false`/`null`/numbers); nested via `a.b=v`; arrays via `arr[]=v`; JSON literals via `k={...}` / `k=[...]` |
+| `-f key=value` (repeatable) | Same, but the value is taken verbatim as a string |
 
-Merging order (low → high): `--data` → `--input` → `-F` → `--query`. Later sources override earlier keys.
+Merging order (low → high): `--data` → `--input` → `-F`/`-f` → `--query`. Later sources override earlier keys.
+
+### `-F` types the value; `-f` does not
+
+The Server does not coerce the fields of a JSON body, so a field declared
+`string` refuses a number. `publisher`, `platformRef`, `projectRef`,
+`externalTaskId` and `correlationId` are plain strings that carry identifiers
+minted by other systems, and those are frequently all digits:
+
+```bash
+agledger api POST /v1/records -F externalTaskId=4821   # sends 4821, refused
+agledger api POST /v1/records -f externalTaskId=4821   # sends "4821"
+```
+
+Reach for `-f` rather than quoting. Shell quotes that survive into the value
+(`-F externalTaskId='"4821"'`) reach the Server as a string with the quote
+characters inside it, and the Server accepts that: the Record is notarized,
+signed and immutable, with an identifier no other system will match.
 
 ## Agent-native DX
 

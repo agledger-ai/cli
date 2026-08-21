@@ -4,9 +4,11 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.4.0] - 2026-08-18
+## [1.4.0] - 2026-08-21
 
 ### Added
+
+- **`-f` / `--raw-field`, which takes a value verbatim as a string.** The Server stopped coercing the fields of a JSON body, so a field declared `string` refuses a number. `publisher`, `platformRef`, `projectRef`, `externalTaskId` and `correlationId` are plain strings carrying identifiers minted by other systems, and those are frequently all digits, so `-F externalTaskId=4821` typed the value as a number and was refused. No `-F` form produced the four characters: quoting reached the Server as a string with the quote marks inside it, which the Server accepts, so the nearest workaround notarized a corrupted identifier into a signed, immutable Record and broke every cross-system join on it. `-f` is the one-character answer, and restores parity with `gh api`, which the flag syntax was modelled on and which has had both forms all along. Path syntax is identical; `-F` and `-f` parse together, so `-F a.b=1 -f a.c=2` builds one tree. Reported by agledger-testbed against the 1.4.0 candidate (agents#122).
 
 - **`--idempotency-key` on `agledger api`, and a generated key on every POST.** The CLI could not send an `Idempotency-Key` at all, so a write retried after a timeout or a dropped connection created a second record rather than replaying the first. Every POST now carries a generated key, which makes a single invocation replay-safe on its own. Pass `--idempotency-key` to reuse the first attempt's key when you are retrying a call that may already have reached the Server: the Server returns the original result instead of recording the work twice. The key binds to method, route and body, so a retry that changes the body is rejected rather than silently replaying the old response. Scoped to POST because that is what the engine arms: all 18 routes that opt into idempotency are POST, and the header is ignored elsewhere. `--dry-run` names the key it would send.
 

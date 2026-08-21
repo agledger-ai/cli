@@ -20,6 +20,7 @@
         "agledger api GET /v1/records -F status=ACTIVE -F limit=50",
         "agledger api POST /v1/records --data '{\"type\":\"notarize-generic-v1\",\"criteria\":{\"summary\":\"...\"}}'",
         "agledger api POST /v1/records -F type=notarize-generic-v1 -F criteria.summary=\"summarize Q3 filings\"",
+        "agledger api POST /v1/records -F type=notarize-generic-v1 -f externalTaskId=4821  # -f keeps a digit-only id a string",
         "agledger api POST /v1/records --input payload.json",
         "cat payload.json | agledger api POST /v1/records --input -",
         "agledger api GET /v1/records --paginate  # streams all pages as NDJSON"
@@ -76,8 +77,16 @@
         },
         "field": {
           "char": "F",
-          "description": "Set a field as key=value. Values are typed: true/false/null, numbers, or JSON for {...}/[...]. Supports nested (a.b.c=v) and array append (arr[]=v). Repeatable.",
+          "description": "Set a typed field as key=value: true/false/null, numbers, or JSON for {...}/[...]. Anything else is a string. Use -f for a value that must stay a string, such as an all-digit identifier. Supports nested (a.b.c=v) and array append (arr[]=v). Repeatable.",
           "name": "field",
+          "hasDynamicHelp": false,
+          "multiple": true,
+          "type": "option"
+        },
+        "raw-field": {
+          "char": "f",
+          "description": "Set a field as key=value, taking the value verbatim as a string. Use this for identifiers that look numeric (externalTaskId, correlationId, platformRef): the Server does not coerce a JSON body, so -F id=4821 sends a number and is refused. Same path syntax as -F. Repeatable.",
+          "name": "raw-field",
           "hasDynamicHelp": false,
           "multiple": true,
           "type": "option"
