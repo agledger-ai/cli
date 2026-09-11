@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- **oclif 5.** `@oclif/core` 4 to 5 and the `oclif` build tool 4 to 5. Command surface, flags, help text and the exit codes (2 usage, 3 no credentials, 9 unreachable Server) are unchanged; the suite and the failure paths were re-run on the new major before it was taken.
+
 - **LICENSE section 6 names the ciphers this package line ships**: Ed25519 (EdDSA), ECDSA P-256 with SHA-256, HMAC-SHA-256, AES-256-GCM, HKDF-SHA-256 and SHA-256. X25519 is gone from the list with the federation encryption key the engine no longer has. The LICENSE file is the only shipped byte that moved.
 
 ## [1.4.0] - 2026-08-21
