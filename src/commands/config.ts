@@ -1,6 +1,13 @@
 import { Args, Flags } from '@oclif/core';
 import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
-import { configPath, readConfig, writeConfig } from '../util/config.js';
+import { configPath, readConfig, writeConfig, type Profile } from '../util/config.js';
+
+/** What kind of credential a profile holds. Never echoes the key itself. */
+function credentialOf(p: Profile): 'api-key' | 'oidc-cert' | 'none' {
+  if (p.apiKey) return 'api-key';
+  if (p.oidc?.tokenCommand || p.oidc?.tokenFile) return 'oidc-cert';
+  return 'none';
+}
 
 /**
  * Inspect and switch between stored profiles in ~/.agledger/config.json.
@@ -46,6 +53,7 @@ export default class Config extends BaseCommand {
         const profiles = Object.entries(config.profiles).map(([name, p]) => ({
           name,
           apiUrl: p.apiUrl,
+          credential: credentialOf(p),
           active: name === config.activeProfile,
         }));
         this.output({ activeProfile: config.activeProfile, profiles });
@@ -70,7 +78,14 @@ export default class Config extends BaseCommand {
             `Run \`agledger config list\` to see profiles.`,
           );
         }
-        this.output({ name, apiUrl: profile.apiUrl, active: name === config.activeProfile });
+        this.output({
+          name,
+          apiUrl: profile.apiUrl,
+          credential: credentialOf(profile),
+          // The stored token source (a command or a path), never a token.
+          ...(profile.oidc ? { oidc: profile.oidc } : {}),
+          active: name === config.activeProfile,
+        });
         return;
       }
 

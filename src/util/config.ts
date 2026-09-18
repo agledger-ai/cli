@@ -7,9 +7,22 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
+/**
+ * Where `agledger login --oidc` finds an OIDC token. The source is stored,
+ * never a token, cert or key: each exchange calls the source again, because
+ * the Server accepts a token id only once.
+ */
+export interface OidcProfileSource {
+  tokenCommand?: string;
+  tokenFile?: string;
+  agentId?: string;
+}
+
+/** A profile holds an API key or an OIDC token source. */
 export interface Profile {
-  apiKey: string;
+  apiKey?: string;
   apiUrl?: string;
+  oidc?: OidcProfileSource;
 }
 
 export interface Config {

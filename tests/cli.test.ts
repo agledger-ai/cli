@@ -27,7 +27,16 @@ const run = (args: string, env?: Record<string, string>) => {
     return {
       stdout: execSync(`node ${BIN} ${args}`, {
         encoding: 'utf-8',
-        env: { ...process.env, AGLEDGER_API_KEY: '', AGLEDGER_API_URL: '', HOME: tmpdir(), ...env },
+        env: {
+          ...process.env,
+          AGLEDGER_API_KEY: '',
+          AGLEDGER_API_URL: '',
+          AGLEDGER_OIDC_TOKEN_CMD: '',
+          AGLEDGER_OIDC_TOKEN_FILE: '',
+          AGLEDGER_OIDC_AGENT_ID: '',
+          HOME: tmpdir(),
+          ...env,
+        },
         timeout: 10_000,
       }).trim(),
       stderr: '',
@@ -861,5 +870,158 @@ describe('--dry-run reports the real resolved URL', () => {
     const parsed = JSON.parse(result.stdout);
     expect(parsed.auth.apiUrl).toBe('https://agledger.internal.example.com');
     expect(parsed.auth.apiUrlSource).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OIDC token sources: precedence, stored sources, failures
+// ---------------------------------------------------------------------------
+describe('OIDC token sources', () => {
+  const unreachable = 'http://127.0.0.1:45999';
+  const JWT = `${Buffer.from('{"alg":"RS256"}').toString('base64url')}.${Buffer.from('{"sub":"agent-1"}').toString('base64url')}.c2ln`;
+  const withProfile = (profiles: Record<string, unknown>): string => {
+    const home = isolatedHome();
+    mkdirSync(join(home, '.agledger'), { recursive: true, mode: 0o700 });
+    writeFileSync(
+      join(home, '.agledger', 'config.json'),
+      JSON.stringify({ profiles, activeProfile: Object.keys(profiles)[0] }),
+      { mode: 0o600 },
+    );
+    return home;
+  };
+
+  it('AGLEDGER_OIDC_TOKEN_CMD is used when no API key is set, and --dry-run names it without running it', () => {
+    const result = run(`api GET /v1/records --dry-run --json --api-url ${unreachable}`, {
+      AGLEDGER_OIDC_TOKEN_CMD: 'exit 99',
+    });
+    expect(result.exitCode).toBe(0);
+    const auth = JSON.parse(result.stdout).auth;
+    expect(auth.credential).toBe('oidc-cert');
+    expect(auth.oidcTokenSource).toBe('AGLEDGER_OIDC_TOKEN_CMD');
+    expect(auth.source).toBe('env');
+    expect(auth.apiKey).toBeNull();
+  });
+
+  it('an API key outranks both token sources', () => {
+    const result = run(`api GET /v1/records --dry-run --json --api-url ${unreachable}`, {
+      AGLEDGER_API_KEY: 'agl_agt_explicit',
+      AGLEDGER_OIDC_TOKEN_CMD: 'exit 99',
+      AGLEDGER_OIDC_TOKEN_FILE: '/tmp/x',
+    });
+    const auth = JSON.parse(result.stdout).auth;
+    expect(auth.credential).toBe('api-key');
+    expect(auth.apiKey).toBe('****icit');
+  });
+
+  it('the command outranks the file', () => {
+    const result = run(`api GET /v1/records --dry-run --json --api-url ${unreachable}`, {
+      AGLEDGER_OIDC_TOKEN_CMD: 'exit 99',
+      AGLEDGER_OIDC_TOKEN_FILE: '/tmp/x',
+    });
+    expect(JSON.parse(result.stdout).auth.oidcTokenSource).toBe('AGLEDGER_OIDC_TOKEN_CMD');
+    const fileOnly = run(`api GET /v1/records --dry-run --json --api-url ${unreachable}`, {
+      AGLEDGER_OIDC_TOKEN_FILE: '/tmp/x',
+    });
+    expect(JSON.parse(fileOnly.stdout).auth.oidcTokenSource).toBe('AGLEDGER_OIDC_TOKEN_FILE');
+  });
+
+  it('an env token source outranks a stored profile key', () => {
+    const home = withProfile({ default: { apiKey: 'agl_adm_stored', apiUrl: unreachable } });
+    const result = run('api GET /v1/records --dry-run --json', { HOME: home, AGLEDGER_OIDC_TOKEN_FILE: '/tmp/x' });
+    expect(JSON.parse(result.stdout).auth.credential).toBe('oidc-cert');
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('a profile stored by `login --oidc` resolves to its token source', () => {
+    const home = withProfile({
+      work: { apiUrl: unreachable, oidc: { tokenCommand: 'exit 99', agentId: 'a-1' } },
+    });
+    const result = run('api GET /v1/records --dry-run --json', { HOME: home });
+    const auth = JSON.parse(result.stdout).auth;
+    expect(auth.credential).toBe('oidc-cert');
+    expect(auth.source).toBe('profile');
+    expect(auth.oidcTokenSource).toBe("profile 'work' oidc.tokenCommand");
+    const listed = JSON.parse(run('config list --json', { HOME: home }).stdout);
+    expect(listed.profiles[0].credential).toBe('oidc-cert');
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('a failing token command exits 3 naming the variable and carrying its stderr', () => {
+    const result = run(`api GET /v1/records --json --api-url ${unreachable}`, {
+      AGLEDGER_OIDC_TOKEN_CMD: 'echo "idp unreachable" >&2; exit 4',
+    });
+    expect(result.exitCode).toBe(3);
+    const parsed = parseJson(result);
+    expect(parsed.code).toBe('OIDC_TOKEN_SOURCE_FAILED');
+    expect(parsed.message).toContain('AGLEDGER_OIDC_TOKEN_CMD');
+    expect(parsed.message).toContain('idp unreachable');
+  });
+
+  it('an unreadable token file exits 3 naming the variable', () => {
+    const result = run(`api GET /v1/records --json --api-url ${unreachable}`, {
+      AGLEDGER_OIDC_TOKEN_FILE: '/nonexistent/agledger-token',
+    });
+    expect(result.exitCode).toBe(3);
+    const parsed = parseJson(result);
+    expect(parsed.code).toBe('OIDC_TOKEN_SOURCE_FAILED');
+    expect(parsed.message).toContain('AGLEDGER_OIDC_TOKEN_FILE');
+  });
+
+  it('--verbose names the source and never prints the token', () => {
+    const result = run(`api GET /v1/records --json --verbose --api-url ${unreachable}`, {
+      AGLEDGER_OIDC_TOKEN_CMD: `printf '%s' '${JWT}'`,
+    });
+    // The exchange cannot reach the Server, so the run fails; the diagnostics come first.
+    const lines = result.stderr.split('\n').map((l) => JSON.parse(l));
+    expect(lines[0]).toMatchObject({ verbose: true, event: 'auth', credential: 'oidc-cert', source: 'AGLEDGER_OIDC_TOKEN_CMD' });
+    expect(result.stderr).not.toContain(JWT);
+    expect(result.stdout).not.toContain(JWT);
+  });
+
+  it('--verbose names an API key source without printing the key', () => {
+    const result = run(`api GET /health --json --verbose --api-url ${unreachable}`, {
+      AGLEDGER_API_KEY: 'agl_agt_verysecretvalue',
+    });
+    const first = JSON.parse(result.stderr.split('\n')[0]!);
+    expect(first).toMatchObject({ event: 'auth', credential: 'api-key', source: 'AGLEDGER_API_KEY' });
+    expect(result.stderr).not.toContain('verysecretvalue');
+  });
+
+  it('the no-credential error lists the API key and both token sources', () => {
+    const parsed = parseJson(run(`api GET /v1/records --json --api-url ${unreachable}`));
+    expect(parsed.code).toBe('AUTH_REQUIRED');
+    for (const name of ['AGLEDGER_API_KEY', 'AGLEDGER_OIDC_TOKEN_CMD', 'AGLEDGER_OIDC_TOKEN_FILE']) {
+      expect(parsed.suggestion).toContain(name);
+    }
+  });
+
+  it('login --oidc without a token source fails before any request', () => {
+    const home = isolatedHome();
+    const result = run(`login --oidc --json --api-url ${unreachable}`, { HOME: home });
+    expect(result.exitCode).toBe(3);
+    expect(parseJson(result).suggestion).toContain('AGLEDGER_OIDC_TOKEN_CMD');
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('login --oidc refuses an API key alongside it', () => {
+    const home = isolatedHome();
+    const result = run(`login --oidc --json --api-url ${unreachable}`, {
+      HOME: home,
+      AGLEDGER_API_KEY: 'agl_agt_x',
+      AGLEDGER_OIDC_TOKEN_CMD: 'exit 99',
+    });
+    expect(result.exitCode).toBe(2);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('login --oidc stores nothing when the token source fails', () => {
+    const home = isolatedHome();
+    const result = run(`login --oidc --json --api-url ${unreachable}`, {
+      HOME: home,
+      AGLEDGER_OIDC_TOKEN_CMD: 'exit 5',
+    });
+    expect(result.exitCode).toBe(3);
+    expect(JSON.parse(run('config list --json', { HOME: home }).stdout).profiles).toEqual([]);
+    rmSync(home, { recursive: true, force: true });
   });
 });

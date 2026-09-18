@@ -61,6 +61,12 @@
           "multiple": false,
           "type": "option"
         },
+        "verbose": {
+          "description": "Report which credential was used, and each OIDC cert exchange, as JSON lines on stderr. Never prints a key, token or cert.",
+          "name": "verbose",
+          "allowNo": false,
+          "type": "boolean"
+        },
         "data": {
           "description": "Request body as a JSON string. For GET/DELETE, used as query parameters.",
           "name": "data",
@@ -136,7 +142,7 @@
     "auth": {
       "aliases": [],
       "args": {},
-      "description": "Check current authentication status. Returns `authenticated: false` when no key is configured (exit 0).",
+      "description": "Check current authentication status, including the OIDC cert identity when a token source is configured. Returns `authenticated: false` when no credential is configured (exit 0).",
       "flags": {
         "json": {
           "description": "Force JSON output (default when stdout is piped)",
@@ -172,6 +178,12 @@
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
+        },
+        "verbose": {
+          "description": "Report which credential was used, and each OIDC cert exchange, as JSON lines on stderr. Never prints a key, token or cert.",
+          "name": "verbose",
+          "allowNo": false,
+          "type": "boolean"
         }
       },
       "hasDynamicHelp": false,
@@ -251,6 +263,12 @@
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
+        },
+        "verbose": {
+          "description": "Report which credential was used, and each OIDC cert exchange, as JSON lines on stderr. Never prints a key, token or cert.",
+          "name": "verbose",
+          "allowNo": false,
+          "type": "boolean"
         }
       },
       "hasDynamicHelp": false,
@@ -307,6 +325,12 @@
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
+        },
+        "verbose": {
+          "description": "Report which credential was used, and each OIDC cert exchange, as JSON lines on stderr. Never prints a key, token or cert.",
+          "name": "verbose",
+          "allowNo": false,
+          "type": "boolean"
         }
       },
       "hasDynamicHelp": false,
@@ -368,6 +392,12 @@
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
+        },
+        "verbose": {
+          "description": "Report which credential was used, and each OIDC cert exchange, as JSON lines on stderr. Never prints a key, token or cert.",
+          "name": "verbose",
+          "allowNo": false,
+          "type": "boolean"
         },
         "full": {
           "description": "Fetch the expanded llms-full.txt narrative instead of the concise llms.txt.",
@@ -436,6 +466,12 @@
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
+        },
+        "verbose": {
+          "description": "Report which credential was used, and each OIDC cert exchange, as JSON lines on stderr. Never prints a key, token or cert.",
+          "name": "verbose",
+          "allowNo": false,
+          "type": "boolean"
         }
       },
       "hasDynamicHelp": false,
@@ -492,6 +528,12 @@
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
+        },
+        "verbose": {
+          "description": "Report which credential was used, and each OIDC cert exchange, as JSON lines on stderr. Never prints a key, token or cert.",
+          "name": "verbose",
+          "allowNo": false,
+          "type": "boolean"
         }
       },
       "hasDynamicHelp": false,
@@ -512,7 +554,12 @@
     "login": {
       "aliases": [],
       "args": {},
-      "description": "Verify an API key and store it in ~/.agledger/config.json (0600)",
+      "description": "Verify an API key, or an OIDC token source with --oidc, and store it in ~/.agledger/config.json (0600)",
+      "examples": [
+        "<%= config.bin %> login --api-url https://agledger.internal --api-key agl_agt_... --profile prod",
+        "<%= config.bin %> login --oidc --api-url https://agledger.internal --oidc-token-cmd 'gcloud auth print-identity-token --audiences=agledger'",
+        "<%= config.bin %> login --oidc --api-url https://agledger.internal --oidc-token-file /var/run/secrets/tokens/agledger"
+      ],
       "flags": {
         "json": {
           "description": "Force JSON output (default when stdout is piped)",
@@ -546,6 +593,42 @@
           "description": "Profile name",
           "name": "profile",
           "default": "default",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "verbose": {
+          "description": "Report which credential was used, and each OIDC cert exchange, as JSON lines on stderr. Never prints a key, token or cert.",
+          "name": "verbose",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "oidc": {
+          "description": "Store an OIDC token source instead of an API key. The source is verified by one cert exchange and a GET /v1/auth/me before it is saved.",
+          "name": "oidc",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "oidc-token-cmd": {
+          "description": "With --oidc: a shell command whose stdout is an OIDC JWT, run on every cert exchange.",
+          "env": "AGLEDGER_OIDC_TOKEN_CMD",
+          "name": "oidc-token-cmd",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "oidc-token-file": {
+          "description": "With --oidc: a file holding an OIDC JWT, read on every cert exchange (a projected token in a pod).",
+          "env": "AGLEDGER_OIDC_TOKEN_FILE",
+          "name": "oidc-token-file",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "oidc-agent-id": {
+          "description": "With --oidc: the agent the cert binds to, when the token does not map to one itself.",
+          "env": "AGLEDGER_OIDC_AGENT_ID",
+          "name": "oidc-agent-id",
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
@@ -606,6 +689,12 @@
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
+        },
+        "verbose": {
+          "description": "Report which credential was used, and each OIDC cert exchange, as JSON lines on stderr. Never prints a key, token or cert.",
+          "name": "verbose",
+          "allowNo": false,
+          "type": "boolean"
         },
         "all": {
           "description": "Remove all profiles",
@@ -680,6 +769,12 @@
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
+        },
+        "verbose": {
+          "description": "Report which credential was used, and each OIDC cert exchange, as JSON lines on stderr. Never prints a key, token or cert.",
+          "name": "verbose",
+          "allowNo": false,
+          "type": "boolean"
         },
         "keys": {
           "description": "Path to a JSON file holding out-of-band public keys. Accepts a {keyId: SPKI-DER-base64} map, a [{keyId, publicKey, ...}] list, or the raw GET /v1/verification-keys response envelope ({data:[...], ...}, the .data array is unwrapped automatically). Merged over any keys embedded in the export.",

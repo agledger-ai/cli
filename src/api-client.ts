@@ -1,3 +1,5 @@
+import type { OidcCertCredential } from './oidc.js';
+
 export interface ApiResponse {
   status: number;
   body: unknown;
@@ -42,18 +44,29 @@ function appendQueryParam(search: URLSearchParams, key: string, value: unknown):
 
 export class ApiClient {
   private readonly apiUrl: string;
-  /** Null sends no Authorization header: the Server's discovery surfaces
-   *  (/health, /llms.txt, /openapi.json, /v1/conformance) answer unauthenticated,
-   *  and an agent holding only a URL must be able to reach them. */
-  private readonly apiKey: string | null;
+  /** An API key, an OIDC cert credential, or null. Null sends no
+   *  Authorization header: the Server's discovery surfaces (/health, /llms.txt,
+   *  /openapi.json, /v1/conformance) answer unauthenticated, and an agent
+   *  holding only a URL must be able to reach them. */
+  private readonly auth: string | OidcCertCredential | null;
   private readonly userAgent: string;
   private readonly timeoutMs: number;
 
-  constructor(apiUrl: string, apiKey: string | null, version = '0.0.0', timeoutMs = 30_000) {
+  constructor(
+    apiUrl: string,
+    auth: string | OidcCertCredential | null,
+    version = '0.0.0',
+    timeoutMs = 30_000,
+  ) {
     this.apiUrl = apiUrl.replace(/\/+$/, '');
-    this.apiKey = apiKey;
+    this.auth = auth;
     this.userAgent = `agledger-cli/${version}`;
     this.timeoutMs = timeoutMs;
+  }
+
+  /** The OIDC credential in use, if any, so `auth` can show the cert identity. */
+  get credential(): OidcCertCredential | null {
+    return this.auth !== null && typeof this.auth === 'object' ? this.auth : null;
   }
 
   /** The base URL requests go to. Surfaced so a network failure can name the
@@ -92,16 +105,16 @@ export class ApiClient {
       }
     }
 
+    // Serialized once: with a cert credential the agent signature covers these
+    // exact bytes, so the body that is hashed must be the body that is sent.
+    const body = options?.body !== undefined ? JSON.stringify(options.body) : undefined;
+
     const headers: Record<string, string> = {
       Accept: 'application/json',
       'User-Agent': this.userAgent,
     };
 
-    if (this.apiKey !== null) {
-      headers.Authorization = `Bearer ${this.apiKey}`;
-    }
-
-    if (options?.body !== undefined) {
+    if (body !== undefined) {
       headers['Content-Type'] = 'application/json';
     }
 
@@ -114,6 +127,33 @@ export class ApiClient {
       headers['Idempotency-Key'] = options?.idempotencyKey ?? crypto.randomUUID();
     }
 
+    const credential = this.credential;
+    if (typeof this.auth === 'string') {
+      headers.Authorization = `Bearer ${this.auth}`;
+    }
+    if (credential && body !== undefined) {
+      Object.assign(headers, credential.signBody(body));
+    }
+
+    if (!credential) return this.send(url, method, headers, body);
+
+    const bearer = await credential.getToken(this.apiUrl);
+    const first = await this.send(url, method, { ...headers, Authorization: `Bearer ${bearer}` }, body);
+    // A cert the Server stops accepting (expired, revoked, clock skew) gets one
+    // re-exchange and one retry. A second 401 is reported as it came. The
+    // retry reuses the Idempotency-Key: a 401 means nothing was processed.
+    if (first.status !== 401) return first;
+    const renewed = await credential.getToken(this.apiUrl, bearer);
+    return this.send(url, method, { ...headers, Authorization: `Bearer ${renewed}` }, body);
+  }
+
+  private async send(
+    url: URL,
+    method: string,
+    headers: Record<string, string>,
+    body: string | undefined,
+  ): Promise<ApiResponse> {
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -121,21 +161,21 @@ export class ApiClient {
       const res = await fetch(url.toString(), {
         method,
         headers,
-        body: options?.body !== undefined ? JSON.stringify(options.body) : undefined,
+        body,
         signal: controller.signal,
       });
 
       const contentType = res.headers.get('content-type') ?? '';
-      let body: unknown;
+      let resBody: unknown;
 
       if (contentType.includes('json')) {
-        body = await res.json();
+        resBody = await res.json();
       } else {
         const text = await res.text();
-        body = { _raw: text, _contentType: contentType };
+        resBody = { _raw: text, _contentType: contentType };
       }
 
-      return { status: res.status, body, ok: res.ok };
+      return { status: res.status, body: resBody, ok: res.ok };
     } finally {
       clearTimeout(timeout);
     }
