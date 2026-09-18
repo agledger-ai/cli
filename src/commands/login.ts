@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { Flags } from '@oclif/core';
 import { ApiClient } from '../api-client.js';
 import { BaseCommand, ErrorCode, ExitCode, argvHasFlag } from '../base.js';
-import { OIDC_ENV } from '../oidc.js';
+import { OIDC_ENV, fetchOidcToken } from '../oidc.js';
 import { readConfig, writeConfig, type Profile } from '../util/config.js';
 
 /**
@@ -29,7 +29,7 @@ export default class Login extends BaseCommand {
     profile: Flags.string({ description: 'Profile name', default: 'default' }),
     oidc: Flags.boolean({
       description:
-        'Store an OIDC token source instead of an API key. The source is verified by one cert exchange and a GET /v1/auth/me before it is saved.',
+        'Store an OIDC token source instead of an API key. A token command is verified by one cert exchange and a GET /v1/auth/me before it is saved. A token file is only checked to hold a JWT: the Server exchanges each token once, so exchanging it here would leave the next command a spent token until the file rotates.',
       default: false,
     }),
     'oidc-token-cmd': Flags.string({
@@ -117,6 +117,37 @@ export default class Login extends BaseCommand {
       ? { kind: 'command' as const, command, origin: argvHasFlag('--oidc-token-cmd') ? '--oidc-token-cmd' : OIDC_ENV.TOKEN_CMD }
       : { kind: 'file' as const, path: file!, origin: argvHasFlag('--oidc-token-file') ? '--oidc-token-file' : OIDC_ENV.TOKEN_FILE };
     const agentId = flags['oidc-agent-id'] || undefined;
+    const stored = {
+      apiUrl,
+      oidc: {
+        ...(command ? { tokenCommand: command } : { tokenFile: file! }),
+        ...(agentId ? { agentId } : {}),
+      },
+    };
+
+    if (source.kind === 'file') {
+      // No exchange: the file returns the same token until it rotates, and the
+      // Server exchanges a token id once, so a check here would spend the token
+      // the next command needs. Confirm it holds a JWT and save.
+      try {
+        const { sub } = await fetchOidcToken(source);
+        this.save(flags.profile, stored);
+        this.output({
+          saved: true,
+          verified: false,
+          profile: flags.profile,
+          credential: 'oidc-cert',
+          tokenSource: 'file',
+          oidcSub: sub,
+          message:
+            'The file holds a JWT; it was not exchanged, so the token stays unspent. Run `agledger auth` to exchange it and see the cert.',
+        });
+      } catch (err) {
+        this.handleError(err);
+      }
+      return;
+    }
+
     const credential = this.oidcCredential(flags, { source, ...(agentId ? { agentId } : {}) });
     this.verboseLog(flags, { event: 'auth', credential: 'oidc-cert', source: source.origin, apiUrl });
 
@@ -127,18 +158,12 @@ export default class Login extends BaseCommand {
         this.handleApiError(response);
       }
 
-      this.save(flags.profile, {
-        apiUrl,
-        oidc: {
-          ...(command ? { tokenCommand: command } : { tokenFile: file! }),
-          ...(agentId ? { agentId } : {}),
-        },
-      });
+      this.save(flags.profile, stored);
       this.output({
         authenticated: true,
         profile: flags.profile,
         credential: 'oidc-cert',
-        tokenSource: command ? 'command' : 'file',
+        tokenSource: 'command',
         cert: credential.cert,
         account: response.body,
       });

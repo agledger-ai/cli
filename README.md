@@ -180,7 +180,7 @@ agledger login --oidc --oidc-token-cmd 'gcloud auth print-identity-token --audie
 What the CLI does with it:
 
 - **A fresh token per exchange.** The Server accepts each token id once, so the source is called again for every exchange and a token is never reused or cached.
-- **The key stays in memory.** Each invocation generates an Ed25519 key pair, proves possession of it in the exchange, and discards it on exit. The cert and the key are never written anywhere; `login --oidc` stores only the command or the file path.
+- **The key stays in memory.** Each invocation generates an Ed25519 key pair, proves possession of it in the exchange, and discards it on exit. The cert and the key are never written anywhere; `login --oidc` stores only the command or the file path. A token command is verified at login with one exchange; a token file is only checked to hold a JWT, because exchanging it would spend the token the next command needs until the file rotates.
 - **Signed writes.** Every request with a body carries `X-Agent-Signature` over the SHA-256 of the exact bytes sent, so the chain entry records the agent's own signature in `on_behalf_of.agent_signature`, not only the Server's.
 - **Refresh.** The cert is re-exchanged once half its lifetime has passed, and once more if the Server answers 401 to it, before the error is reported.
 - **Failures name the source.** A token command that exits non-zero fails with `OIDC_TOKEN_SOURCE_FAILED` (exit 3), naming the variable and carrying the command's stderr. A refused exchange fails with `OIDC_EXCHANGE_FAILED` and forwards the Server's error, including its `recoveryHint`.
@@ -195,7 +195,7 @@ When the work is done for a person or another party rather than for the agent it
 | `AGLEDGER_ON_BEHALF_OF_CMD` | A shell command whose stdout is the delegation token |
 | `AGLEDGER_ON_BEHALF_OF_FILE` | A file holding the delegation token |
 
-The command wins over the file. The Server never deduplicates a delegation token, so one is reused until shortly before its `exp` and then read again. It never appears in output, errors or `--verbose`, which names only the variable in use.
+The command wins over the file. The Server never deduplicates a delegation token, so one is reused until shortly before its `exp` and then read again; one with no `exp` is read again for every request, and one already expired is refused before it is sent. If the Server refuses the delegation token, the source is read once more and the request retried. It never appears in output, errors or `--verbose`, which names only the variable in use.
 
 ```bash
 export AGLEDGER_ON_BEHALF_OF_CMD='your-idp-token-exchange --subject alice@example.com --actor my-agent'

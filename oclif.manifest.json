@@ -604,7 +604,7 @@
           "type": "boolean"
         },
         "oidc": {
-          "description": "Store an OIDC token source instead of an API key. The source is verified by one cert exchange and a GET /v1/auth/me before it is saved.",
+          "description": "Store an OIDC token source instead of an API key. A token command is verified by one cert exchange and a GET /v1/auth/me before it is saved. A token file is only checked to hold a JWT: the Server exchanges each token once, so exchanging it here would leave the next command a spent token until the file rotates.",
           "name": "oidc",
           "allowNo": false,
           "type": "boolean"

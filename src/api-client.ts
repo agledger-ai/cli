@@ -42,6 +42,22 @@ function appendQueryParam(search: URLSearchParams, key: string, value: unknown):
   search.set(key, String(value));
 }
 
+/**
+ * Which credential a 401 is about, read from the Server's error body.
+ *
+ * - A delegation token the Server refused names the header or the delegation
+ *   (`AGLedger-On-Behalf-Of: ...`, `Delegation token could not be validated`).
+ * - A body signature it refused names `X-Agent-Signature`.
+ * - Anything else is about the bearer itself.
+ */
+export function classify401(body: unknown): 'delegation' | 'agent-signature' | 'bearer' {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const text = [b.message, b.detail].filter((v): v is string => typeof v === 'string').join(' ');
+  if (/x-agent-signature/i.test(text)) return 'agent-signature';
+  if (/on-behalf-of|delegation/i.test(text)) return 'delegation';
+  return 'bearer';
+}
+
 export class ApiClient {
   private readonly apiUrl: string;
   /** An API key, an OIDC cert credential, or null. Null sends no
@@ -67,6 +83,11 @@ export class ApiClient {
     this.userAgent = `agledger-cli/${version}`;
     this.timeoutMs = timeoutMs;
     this.onBehalfOf = onBehalfOf;
+  }
+
+  /** True when requests go out with no Authorization header. */
+  get isAnonymous(): boolean {
+    return this.auth === null;
   }
 
   /** The OIDC credential in use, if any, so `auth` can show the cert identity. */
@@ -128,10 +149,12 @@ export class ApiClient {
     // ignored. A generated key makes the CLI's own writes replay-safe by default;
     // a caller retrying the same logical operation across processes passes its
     // own key so the second attempt dedups instead of creating a second record.
-    if (method.toUpperCase() === 'POST') {
+    const isPost = method.toUpperCase() === 'POST';
+    if (isPost) {
       headers['Idempotency-Key'] = options?.idempotencyKey ?? crypto.randomUUID();
-      if (this.onBehalfOf) headers['AGLedger-On-Behalf-Of'] = await this.onBehalfOf.get();
     }
+    const delegation = isPost ? this.onBehalfOf : null;
+    if (delegation) headers['AGLedger-On-Behalf-Of'] = await delegation.get();
 
     const credential = this.credential;
     if (typeof this.auth === 'string') {
@@ -141,16 +164,30 @@ export class ApiClient {
       Object.assign(headers, credential.signBody(body));
     }
 
-    if (!credential) return this.send(url, method, headers, body);
-
-    const bearer = await credential.getToken(this.apiUrl);
-    const first = await this.send(url, method, { ...headers, Authorization: `Bearer ${bearer}` }, body);
-    // A cert the Server stops accepting (expired, revoked, clock skew) gets one
-    // re-exchange and one retry. A second 401 is reported as it came. The
-    // retry reuses the Idempotency-Key: a 401 means nothing was processed.
+    const bearer = credential ? await credential.getToken(this.apiUrl) : null;
+    const withBearer = (token: string | null) => (token ? { ...headers, Authorization: `Bearer ${token}` } : headers);
+    const first = await this.send(url, method, withBearer(bearer), body);
     if (first.status !== 401) return first;
-    const renewed = await credential.getToken(this.apiUrl, bearer);
-    return this.send(url, method, { ...headers, Authorization: `Bearer ${renewed}` }, body);
+
+    // One retry at most, and only when something the CLI holds can be renewed.
+    // The retry reuses the Idempotency-Key: a 401 means nothing was processed.
+    switch (classify401(first.body)) {
+      case 'agent-signature':
+        // The key did not change, so re-sending the same signature cannot help.
+        return first;
+      case 'delegation': {
+        if (!delegation) return first;
+        const token = await delegation.get(true);
+        return this.send(url, method, { ...withBearer(bearer), 'AGLedger-On-Behalf-Of': token }, body);
+      }
+      case 'bearer': {
+        // A cert the Server stops accepting (expired, revoked, clock skew) gets
+        // one re-exchange. A second 401 is reported as it came.
+        if (!credential || !bearer) return first;
+        const renewed = await credential.getToken(this.apiUrl, bearer);
+        return this.send(url, method, withBearer(renewed), body);
+      }
+    }
   }
 
   private async send(
