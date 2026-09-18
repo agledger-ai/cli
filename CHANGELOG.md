@@ -4,6 +4,28 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- **OIDC token sources: an agent can authenticate with its own identity provider instead of an API key** (cli#22). Set `AGLEDGER_OIDC_TOKEN_CMD` to a shell command whose stdout is an OIDC JWT (`gcloud auth print-identity-token`, `az account get-access-token`, `vault`, `kubectl create token`, or any script), or `AGLEDGER_OIDC_TOKEN_FILE` to a file holding one, such as a projected service-account token that Kubernetes rotates on disk. `AGLEDGER_OIDC_AGENT_ID` optionally names the agent the cert binds to. The CLI exchanges the token at `POST /v1/auth/oidc/cert` for a short-lived cert the Server signs and sends that cert as the bearer. The source is called again for every exchange, because the Server accepts each token id only once. Each invocation generates an Ed25519 key pair in memory and proves possession of it in the exchange; neither the key nor the cert is ever written to disk. The exchange is implemented in the CLI's own client, with no SDK dependency.
+- **Signed writes under a cert.** Every request with a body carries `X-Agent-Signature-Content-Hash` and `X-Agent-Signature`, an Ed25519 signature over the SHA-256 of the exact bytes sent, so the chain entry records the agent's own signature under `on_behalf_of.agent_signature` beside the Server's.
+- **Refresh and retry.** A cert is re-exchanged once half its lifetime has passed. A 401 to a cert bearer triggers one re-exchange and one retry of the same request (same body, same `Idempotency-Key`); a second 401 is reported as the Server sent it. Concurrent requests share one exchange.
+- **`agledger login --oidc`** verifies a token source with one exchange and a `GET /v1/auth/me`, then stores the source in the profile: `--oidc-token-cmd` or `--oidc-token-file`, each also read from its environment variable, and optionally `--oidc-agent-id`. A token, cert or key is never stored. `config list` and `config get` report which kind of credential a profile holds.
+- **`agledger auth` shows the cert identity** when a token source is in use: the cert the Server issued (id, agent, issuer, subject, scopes, issue and expiry times) beside the `GET /v1/auth/me` account.
+- **`--verbose` on every command** reports which credential a command used and each OIDC exchange (cert id, agent, subject, expiry, and why it ran) as JSON lines on stderr. It never prints a key, token or cert.
+
+### Changed
+
+- **Credential precedence** is now: `--api-key` or `AGLEDGER_API_KEY`, then `AGLEDGER_OIDC_TOKEN_CMD`, then `AGLEDGER_OIDC_TOKEN_FILE`, then the stored profile's API key or token source. An API key set explicitly always wins. The no-credential error (`AUTH_REQUIRED`, exit 3) now names all three sources.
+- **`--dry-run`** names an OIDC token source (`credential: "oidc-cert"`, `oidcTokenSource`) without running it.
+- **`discover` checks `/health` without a credential**, so a token source or identity provider that is down does not also hide whether the Server is up.
+- **README:** the Quick Start uses an agent key. With the admin key it showed, the record create was refused (an admin key must name an agent principal) and the completion was refused (only the performer submits one). The completion step now creates the record it completes, with the seeded `principal-gate-generic-v1` and `autoActivate`, since a `notarize-generic-v1` record takes no completion. The `login` example passes `--api-url`, without which it exited 2, and the `-F`/`-f` example includes the fields a create requires. Every block was run against a 1.8.0 Server.
+
+### Security
+
+- **Tokens stay out of output.** A token command that fails exits 3 with `OIDC_TOKEN_SOURCE_FAILED`, naming the variable and carrying the command's stderr with anything shaped like a JWT redacted. Output that is not a JWT is reported by length, never echoed. A refused exchange exits with `OIDC_EXCHANGE_FAILED` and forwards the Server's error body (its `recoveryHint` included) with the token scrubbed out of it: the Server's validation errors echo the offending input, which on this route is the token.
+
 ## [1.4.1] - 2026-09-10
 
 ### Changed

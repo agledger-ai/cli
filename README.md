@@ -1,6 +1,6 @@
 # @agledger/cli
 
-The official CLI for the [AGLedger](https://agledger.ai) API: change control for AI agents. A self-hosted notary that records every change an agent makes, signed and hash-chained, and gates the ones that matter.
+The official CLI for the [AGLedger](https://agledger.ai) API: change control for AI agents. Agent memory, approvals, audit trail, and notifications: one API, one signed ledger, self-hosted.
 
 A **thin cover** over the API. The CLI passes your request straight through to the API and forwards the response: no hand-coded per-endpoint wrappers, no flag-to-body translation, no drift. Every AGLedger API route is reachable via `agledger api <METHOD> <path>`.
 
@@ -21,7 +21,7 @@ npm install -g @agledger/cli
 ## Quick Start
 
 ```bash
-export AGLEDGER_API_KEY=agl_adm_...
+export AGLEDGER_API_KEY=agl_agt_...
 export AGLEDGER_API_URL=https://your-agledger-instance
 
 # Check health, identity, scopes, and get the quickstart workflow
@@ -46,8 +46,16 @@ agledger api POST /v1/records \
   -F criteria.summary='summarize Q3 filings' \
   -f externalTaskId=4821
 
-# Submit a completion. On a gated record the principal then renders a Verdict
-# (accept / reject) on the Completion; use the route documented in the API
+# A type with a completion phase, such as the seeded principal-gate-generic-v1,
+# takes a Completion once the record is ACTIVE; autoActivate gets it there on
+# create. Note the `id` it returns.
+agledger api POST /v1/records \
+  -F type=principal-gate-generic-v1 \
+  -F criteria.summary='deliver 500x copper wire' \
+  -F autoActivate=true
+
+# Submit a completion. The principal then renders a Verdict (accept / reject)
+# on the Completion; use the route documented in the API
 # (see `agledger api GET /openapi.json`).
 agledger api POST /v1/records/<record-id>/completions \
   --data '{"evidence":{"summary":"delivered 500x copper wire","evidenceUrl":"https://orders.example.com/CW-500"}}'
@@ -79,8 +87,8 @@ The Server does not coerce the fields of a JSON body, so a field declared
 minted by other systems, and those are frequently all digits:
 
 ```bash
-agledger api POST /v1/records -F externalTaskId=4821   # sends 4821, refused
-agledger api POST /v1/records -f externalTaskId=4821   # sends "4821"
+agledger api POST /v1/records -F type=notarize-generic-v1 -F criteria.summary=x -F externalTaskId=4821   # sends 4821, refused
+agledger api POST /v1/records -F type=notarize-generic-v1 -F criteria.summary=x -f externalTaskId=4821   # sends "4821"
 ```
 
 Reach for `-f` rather than quoting. Shell quotes that survive into the value
@@ -93,6 +101,7 @@ signed and immutable, with an identifier no other system will match.
 - `--json` on every command (auto when stdout is piped)
 - `--quiet` suppresses output (exit code only)
 - `--dry-run` on `agledger api` shows the request without sending
+- `--verbose` on every command reports which credential was used, and each OIDC cert exchange, as JSON lines on stderr; it never prints a key, token or cert
 - `--paginate` on GET follows cursor pagination and streams NDJSON
 - Every POST carries a generated `Idempotency-Key`, so one invocation is replay-safe on its own. Retrying a call that may already have reached the Server? Pass `--idempotency-key` with the first attempt's key and the Server replays the original result instead of recording the work twice
 - Structured errors on stderr: `{error: true, code, message, suggestion, ...}`; API errors pass through verbatim
@@ -114,9 +123,9 @@ agledger api GET /openapi.json          # Full API route catalog
 |---|---|
 | `api` | Call any API endpoint |
 | `discover` | Health + identity + scopes + quickstart |
-| `login` | Verify API key, store in `~/.agledger/config.json` (0600) |
+| `login` | Verify an API key (or, with `--oidc`, an OIDC token source) and store it in `~/.agledger/config.json` (0600) |
 | `logout` | Remove profile(s) |
-| `auth` | Check current login state (exit 0 either way) |
+| `auth` | Check current login state and show the identity, including the OIDC cert (exit 0 when nothing is configured) |
 | `config` | `list` / `get` / `use <profile>` / `path` |
 | `verify` | Offline audit export verification (COSE_Sign1, RFC 9052; Ed25519 or ES256; no network) |
 | `docs` | Fetch the API's agent-oriented narrative (`llms.txt` / `--full`) |
@@ -127,7 +136,7 @@ agledger api GET /openapi.json          # Full API route catalog
 
 ```bash
 # Verifies the key against the API, then stores it under ~/.agledger/config.json (0600)
-agledger login --api-key agl_adm_... --profile prod
+agledger login --api-url https://your-agledger-instance --api-key agl_agt_... --profile prod
 
 # Switch the active profile; subsequent commands use its key automatically
 agledger config use prod
@@ -139,12 +148,50 @@ agledger api GET /v1/records --profile prod
 AGLEDGER_API_KEY=... AGLEDGER_API_URL=... agledger api GET /v1/records
 ```
 
+### OIDC: no stored secret
+
+An agent can authenticate with a token from your own identity provider instead
+of an API key. The CLI runs a token source you name, exchanges the token at
+`POST /v1/auth/oidc/cert` for a short-lived cert the Server signs, and sends
+that cert as the bearer. Your operator first registers the IdP as a trusted
+issuer on the Server.
+
+| Variable | What it holds |
+|---|---|
+| `AGLEDGER_OIDC_TOKEN_CMD` | A shell command whose stdout is an OIDC JWT, run on every exchange: `gcloud auth print-identity-token`, `az account get-access-token`, `vault`, `kubectl create token`, or your own script |
+| `AGLEDGER_OIDC_TOKEN_FILE` | A file holding an OIDC JWT, read on every exchange, such as a projected service-account token that Kubernetes rotates on disk |
+| `AGLEDGER_OIDC_AGENT_ID` | Optional. The agent the cert binds to, when the token does not map to one itself |
+
+```bash
+unset AGLEDGER_API_KEY   # an API key outranks a token source
+export AGLEDGER_API_URL=https://your-agledger-instance
+export AGLEDGER_OIDC_TOKEN_CMD='gcloud auth print-identity-token --audiences=agledger'
+
+# Shows the account and the cert the Server issued: agent, issuer, subject, scopes, expiry
+agledger auth
+
+# Every call now exchanges a fresh token for a cert; nothing is written to disk
+agledger api POST /v1/records -F type=notarize-generic-v1 -F criteria.summary='nightly reconciliation'
+
+# Or store the token source (never a token) in a profile
+agledger login --oidc --oidc-token-cmd 'gcloud auth print-identity-token --audiences=agledger' --profile work
+```
+
+What the CLI does with it:
+
+- **A fresh token per exchange.** The Server accepts each token id once, so the source is called again for every exchange and a token is never reused or cached.
+- **The key stays in memory.** Each invocation generates an Ed25519 key pair, proves possession of it in the exchange, and discards it on exit. The cert and the key are never written anywhere; `login --oidc` stores only the command or the file path.
+- **Signed writes.** Every request with a body carries `X-Agent-Signature` over the SHA-256 of the exact bytes sent, so the chain entry records the agent's own signature in `on_behalf_of.agent_signature`, not only the Server's.
+- **Refresh.** The cert is re-exchanged once half its lifetime has passed, and once more if the Server answers 401 to it, before the error is reported.
+- **Failures name the source.** A token command that exits non-zero fails with `OIDC_TOKEN_SOURCE_FAILED` (exit 3), naming the variable and carrying the command's stderr. A refused exchange fails with `OIDC_EXCHANGE_FAILED` and forwards the Server's error, including its `recoveryHint`.
+- **`--verbose`** prints which credential a command used and each exchange (cert id, agent, subject, expiry) as JSON lines on stderr. It never prints a key, token or cert.
+
 **Credential precedence** (highest first), applied per command:
 
-- **API key:** `--api-key` flag → `AGLEDGER_API_KEY` env → stored profile (`--profile <name>`, else the active profile).
+- **Credential:** `--api-key` flag → `AGLEDGER_API_KEY` env → `AGLEDGER_OIDC_TOKEN_CMD` → `AGLEDGER_OIDC_TOKEN_FILE` → stored profile (`--profile <name>`, else the active profile), whose API key or OIDC token source is used. `AGLEDGER_OIDC_AGENT_ID` overrides a profile's stored agent id.
 - **API URL:** `--api-url` flag → `AGLEDGER_API_URL` env → stored profile URL. There is no default: AGLedger is self-hosted, so a call with no URL from any of those three sources exits 2 with `CONFIG_ERROR` rather than guessing a host.
 
-So once you `agledger login`, plain `agledger api ...` calls authenticate from the stored profile with no flags or env. `--dry-run` echoes the resolved auth (URL, source, masked key) so you can confirm which credentials a call would use without sending it; when no URL is configured it reports `apiUrl: null` and names the error the real call would raise.
+So once you `agledger login`, plain `agledger api ...` calls authenticate from the stored profile with no flags or env. `--dry-run` echoes the resolved auth (URL, source, masked key, or the name of the OIDC token source, which it does not run) so you can confirm which credentials a call would use without sending it; when no URL is configured it reports `apiUrl: null` and names the error the real call would raise.
 
 Agent keys (`agl_agt_*`) and admin keys (`agl_adm_*`) are both accepted; the API routes them appropriately.
 

@@ -3,7 +3,9 @@
 Thin cover over the AGLedger API. The CLI passes your call through to the API and forwards the response. No flag-to-body translation, no drift.
 
 ## Setup
-Credentials resolve per command with this precedence: `--api-key` flag > `AGLEDGER_API_KEY` env > stored profile (after `agledger login`). API URL: `--api-url` flag > `AGLEDGER_API_URL` env > stored profile URL.
+Credentials resolve per command with this precedence: `--api-key` flag > `AGLEDGER_API_KEY` env > `AGLEDGER_OIDC_TOKEN_CMD` > `AGLEDGER_OIDC_TOKEN_FILE` > stored profile (after `agledger login`). API URL: `--api-url` flag > `AGLEDGER_API_URL` env > stored profile URL.
+
+OIDC instead of an API key: set `AGLEDGER_OIDC_TOKEN_CMD` to a command that prints an OIDC JWT from your identity provider, or `AGLEDGER_OIDC_TOKEN_FILE` to a file holding one (optional `AGLEDGER_OIDC_AGENT_ID`). The CLI exchanges a fresh token for a short-lived cert on each invocation, signs request bodies with a key held only in memory, and re-exchanges on expiry or a 401. `agledger auth` shows the cert identity; `--verbose` names the credential source on stderr. Failures: `OIDC_TOKEN_SOURCE_FAILED` (exit 3, names the variable, carries the command's stderr) and `OIDC_EXCHANGE_FAILED` (forwards the Server error and its `recoveryHint`).
 
 **There is no default API URL, and it is not optional.** AGLedger is self-hosted, so the CLI has no server to guess. If none of those three sources supplies one, the command exits 2 with `CONFIG_ERROR` rather than calling a placeholder host.
 
@@ -58,7 +60,8 @@ agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value | -f key
 
 ## Credentials
 - `agledger login --api-key <key> [--profile NAME]`: verifies key, stores in `~/.agledger/config.json` (0600). After login, plain `agledger api ...` calls authenticate from the stored profile (no flag/env needed).
+- `agledger login --oidc --oidc-token-cmd <command> | --oidc-token-file <path> [--oidc-agent-id ID] [--profile NAME]`: verifies the token source with one exchange, then stores the source (never a token, cert or key).
 - `agledger config use <profile>`: set the active profile; `agledger api ... --profile NAME` uses a specific one per-invocation.
 - `agledger logout [--profile NAME | --all]`
 - `agledger config list | get | use <profile> | path`
-- `agledger auth`: check login state (exit 0 whether logged in or not)
+- `agledger auth`: check login state and identity, including the OIDC cert (exit 0 when nothing is configured)
