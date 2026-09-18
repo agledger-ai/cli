@@ -1,4 +1,4 @@
-import type { OidcCertCredential } from './oidc.js';
+import type { DelegationToken, OidcCertCredential } from './oidc.js';
 
 export interface ApiResponse {
   status: number;
@@ -51,17 +51,22 @@ export class ApiClient {
   private readonly auth: string | OidcCertCredential | null;
   private readonly userAgent: string;
   private readonly timeoutMs: number;
+  /** Sent as `AGLedger-On-Behalf-Of` on POST. Every route that declares the
+   *  header is a POST, and the Server ignores it on routes that do not. */
+  private readonly onBehalfOf: DelegationToken | null;
 
   constructor(
     apiUrl: string,
     auth: string | OidcCertCredential | null,
     version = '0.0.0',
     timeoutMs = 30_000,
+    onBehalfOf: DelegationToken | null = null,
   ) {
     this.apiUrl = apiUrl.replace(/\/+$/, '');
     this.auth = auth;
     this.userAgent = `agledger-cli/${version}`;
     this.timeoutMs = timeoutMs;
+    this.onBehalfOf = onBehalfOf;
   }
 
   /** The OIDC credential in use, if any, so `auth` can show the cert identity. */
@@ -125,6 +130,7 @@ export class ApiClient {
     // own key so the second attempt dedups instead of creating a second record.
     if (method.toUpperCase() === 'POST') {
       headers['Idempotency-Key'] = options?.idempotencyKey ?? crypto.randomUUID();
+      if (this.onBehalfOf) headers['AGLedger-On-Behalf-Of'] = await this.onBehalfOf.get();
     }
 
     const credential = this.credential;

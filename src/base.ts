@@ -13,7 +13,15 @@ import { readFileSync } from 'node:fs';
 import { Command, Flags } from '@oclif/core';
 import { ApiClient } from './api-client.js';
 import type { ApiResponse } from './api-client.js';
-import { OIDC_ENV, OidcCertCredential, OidcExchangeError, OidcTokenSourceError, type OidcTokenSource } from './oidc.js';
+import {
+  DelegationToken,
+  OIDC_ENV,
+  ON_BEHALF_OF_ENV,
+  OidcCertCredential,
+  OidcExchangeError,
+  OidcTokenSourceError,
+  type OidcTokenSource,
+} from './oidc.js';
 import { readConfig, type Profile } from './util/config.js';
 
 /** Semantic exit codes for agent consumption. Stable across releases. */
@@ -111,6 +119,15 @@ export function envOidcSource(): OidcTokenSource | undefined {
 
 /** Whether a flag was passed on the command line (`--flag value` or `--flag=value`),
  *  as opposed to reaching oclif through its `env` binding. */
+/** The delegation token source from the environment. The command wins over the file. */
+export function envOnBehalfOfSource(): OidcTokenSource | undefined {
+  const command = process.env[ON_BEHALF_OF_ENV.CMD];
+  if (command) return { kind: 'command', command, origin: ON_BEHALF_OF_ENV.CMD };
+  const path = process.env[ON_BEHALF_OF_ENV.FILE];
+  if (path) return { kind: 'file', path, origin: ON_BEHALF_OF_ENV.FILE };
+  return undefined;
+}
+
 export function argvHasFlag(flag: string): boolean {
   return process.argv.some((a) => a === flag || a.startsWith(`${flag}=`));
 }
@@ -253,12 +270,25 @@ export abstract class BaseCommand extends Command {
     }
 
     this.lastApiUrl = apiUrl;
-    this.verboseLog(flags, { event: 'auth', ...this.describeCredential(credential), apiUrl });
+    const onBehalfOfSource = envOnBehalfOfSource();
+    this.verboseLog(flags, {
+      event: 'auth',
+      ...this.describeCredential(credential),
+      apiUrl,
+      ...(onBehalfOfSource ? { onBehalfOfSource: onBehalfOfSource.origin } : {}),
+    });
+    const onBehalfOf = onBehalfOfSource ? new DelegationToken(onBehalfOfSource) : null;
 
     if (credential.kind === 'oidc') {
-      return new ApiClient(apiUrl, this.oidcCredential(flags, credential), this.config.version);
+      return new ApiClient(apiUrl, this.oidcCredential(flags, credential), this.config.version, undefined, onBehalfOf);
     }
-    return new ApiClient(apiUrl, credential.kind === 'api-key' ? credential.key : null, this.config.version);
+    return new ApiClient(
+      apiUrl,
+      credential.kind === 'api-key' ? credential.key : null,
+      this.config.version,
+      undefined,
+      onBehalfOf,
+    );
   }
 
   /** Build a cert credential for one invocation. Its key pair never leaves memory. */
@@ -452,8 +482,8 @@ export abstract class BaseCommand extends Command {
         err.message,
         ExitCode.AUTH_ERROR,
         err.kind === 'command'
-          ? `Run the command in ${err.origin} by hand and check it prints one OIDC JWT on stdout and exits 0.`
-          : `Check the file named by ${err.origin} exists, is readable, and holds one OIDC JWT.`,
+          ? `Run the command in ${err.origin} by hand and check it prints one JWT on stdout and exits 0.`
+          : `Check the file named by ${err.origin} exists, is readable, and holds one JWT.`,
       );
     }
     if (err instanceof OidcExchangeError) {

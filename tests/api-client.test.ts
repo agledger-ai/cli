@@ -7,7 +7,11 @@
  * through `agledger api`, which is the CLI's whole surface for them.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { ApiClient } from '../src/api-client.js';
+import { DelegationToken, OidcTokenSourceError, type OidcTokenSource } from '../src/oidc.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -129,5 +133,60 @@ describe('ApiClient idempotency', () => {
       const headers = (call[1] as RequestInit).headers as Record<string, string>;
       expect(headers['Idempotency-Key']).toBeUndefined();
     }
+  });
+});
+
+describe('AGLedger-On-Behalf-Of delegation token', () => {
+  const b64url = (s: string) => Buffer.from(s).toString('base64url');
+  const tokenFor = (sub: string, exp: number) =>
+    `${b64url('{"alg":"RS256"}')}.${b64url(JSON.stringify({ sub, exp, act: { sub: 'agent' } }))}.c2ln`;
+  const commandPrinting = (token: string): OidcTokenSource => ({
+    kind: 'command',
+    command: `printf '%s' '${token}'`,
+    origin: 'AGLEDGER_ON_BEHALF_OF_CMD',
+  });
+  const headerOf = (call: unknown[]) =>
+    ((call[1] as RequestInit).headers as Record<string, string>)['AGLedger-On-Behalf-Of'];
+  const stubMany = () => {
+    const mockFetch = vi.fn(async () => new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('fetch', mockFetch);
+    return mockFetch;
+  };
+
+  it('is sent on POST and not on GET', async () => {
+    const mockFetch = stubMany();
+    const token = tokenFor('alice', Math.floor(Date.now() / 1000) + 3600);
+    const client = new ApiClient('https://api.test', 'key', '1.0.0', undefined, new DelegationToken(commandPrinting(token)));
+    await client.request('POST', '/v1/records', { body: { type: 't' } });
+    await client.request('GET', '/v1/records');
+    expect(headerOf(mockFetch.mock.calls[0])).toBe(token);
+    expect(headerOf(mockFetch.mock.calls[1])).toBeUndefined();
+  });
+
+  it('is reused until shortly before exp, then read from the source again', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agl-obo-'));
+    const path = join(dir, 'token');
+    let now = 1_000_000_000_000;
+    const first = tokenFor('alice', now / 1000 + 120);
+    writeFileSync(path, first);
+    const source: OidcTokenSource = { kind: 'file', path, origin: 'AGLEDGER_ON_BEHALF_OF_FILE' };
+    const delegation = new DelegationToken(source, () => now);
+    expect(await delegation.get()).toBe(first);
+    const second = tokenFor('alice', now / 1000 + 3600);
+    writeFileSync(path, second);
+    now += 60_000;
+    expect(await delegation.get()).toBe(first);
+    now += 40_000; // 20s before exp: inside the 30s margin
+    expect(await delegation.get()).toBe(second);
+  });
+
+  it('a failing source names its variable and never reaches the network', async () => {
+    const mockFetch = stubMany();
+    const source: OidcTokenSource = { kind: 'command', command: 'exit 7', origin: 'AGLEDGER_ON_BEHALF_OF_CMD' };
+    const client = new ApiClient('https://api.test', 'key', '1.0.0', undefined, new DelegationToken(source));
+    const err = (await client.request('POST', '/v1/records', { body: {} }).catch((e: unknown) => e)) as Error;
+    expect(err).toBeInstanceOf(OidcTokenSourceError);
+    expect(err.message).toContain('AGLEDGER_ON_BEHALF_OF_CMD');
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });

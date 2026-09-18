@@ -21,6 +21,16 @@ export const OIDC_ENV = {
   AGENT_ID: 'AGLEDGER_OIDC_AGENT_ID',
 } as const;
 
+/**
+ * Env vars naming an RFC 8693 delegation token, sent as `AGLedger-On-Behalf-Of`
+ * when the work is done for a person or another party. The MCP server reads
+ * the same names.
+ */
+export const ON_BEHALF_OF_ENV = {
+  CMD: 'AGLEDGER_ON_BEHALF_OF_CMD',
+  FILE: 'AGLEDGER_ON_BEHALF_OF_FILE',
+} as const;
+
 export type OidcTokenSource =
   | { kind: 'command'; command: string; /** Where the command came from, for errors and --verbose. */ origin: string }
   | { kind: 'file'; path: string; origin: string };
@@ -353,5 +363,34 @@ export class OidcCertCredential {
       expiresAt: out.cert.expiresAt,
     });
     return out.certJws;
+  }
+}
+
+/**
+ * The delegation token for one invocation, read from its source on first use.
+ * Unlike the cert exchange, the Server never deduplicates a delegation token,
+ * so one is reused until shortly before its `exp` and then read again.
+ */
+export class DelegationToken {
+  private cached: { token: string; expMs: number } | null = null;
+
+  constructor(
+    readonly source: OidcTokenSource,
+    private readonly now: () => number = Date.now,
+  ) {}
+
+  async get(): Promise<string> {
+    if (this.cached && this.cached.expMs - this.now() > 30_000) return this.cached.token;
+    const { token } = await fetchOidcToken(this.source);
+    let expMs = Number.POSITIVE_INFINITY;
+    try {
+      const exp = (JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8')) as { exp?: unknown }).exp;
+      if (typeof exp === 'number') expMs = exp * 1000;
+    } catch {
+      // fetchOidcToken already parsed this payload; an unreadable exp means read it again next time.
+      expMs = 0;
+    }
+    this.cached = { token, expMs };
+    return token;
   }
 }

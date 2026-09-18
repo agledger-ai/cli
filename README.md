@@ -186,6 +186,22 @@ What the CLI does with it:
 - **Failures name the source.** A token command that exits non-zero fails with `OIDC_TOKEN_SOURCE_FAILED` (exit 3), naming the variable and carrying the command's stderr. A refused exchange fails with `OIDC_EXCHANGE_FAILED` and forwards the Server's error, including its `recoveryHint`.
 - **`--verbose`** prints which credential a command used and each exchange (cert id, agent, subject, expiry) as JSON lines on stderr. It never prints a key, token or cert.
 
+### Working on behalf of someone
+
+When the work is done for a person or another party rather than for the agent itself, give the CLI the RFC 8693 delegation token your IdP's token exchange issued (it must carry an `act` claim naming the agent). The CLI sends it as `AGLedger-On-Behalf-Of` on every POST, beside its own credential, and the Server seals the delegation into the signed chain entry: `bound` when the CLI authenticates through an OIDC cert whose subject is the token's `act`, `unbound` on an API key.
+
+| Variable | What it holds |
+|---|---|
+| `AGLEDGER_ON_BEHALF_OF_CMD` | A shell command whose stdout is the delegation token |
+| `AGLEDGER_ON_BEHALF_OF_FILE` | A file holding the delegation token |
+
+The command wins over the file. The Server never deduplicates a delegation token, so one is reused until shortly before its `exp` and then read again. It never appears in output, errors or `--verbose`, which names only the variable in use.
+
+```bash
+export AGLEDGER_ON_BEHALF_OF_CMD='your-idp-token-exchange --subject alice@example.com --actor my-agent'
+agledger api POST /v1/records -F type=notarize-generic-v1 -F criteria.summary='expense report for alice'
+```
+
 **Credential precedence** (highest first), applied per command:
 
 - **Credential:** `--api-key` flag → `AGLEDGER_API_KEY` env → `AGLEDGER_OIDC_TOKEN_CMD` → `AGLEDGER_OIDC_TOKEN_FILE` → stored profile (`--profile <name>`, else the active profile), whose API key or OIDC token source is used. `AGLEDGER_OIDC_AGENT_ID` overrides a profile's stored agent id.
