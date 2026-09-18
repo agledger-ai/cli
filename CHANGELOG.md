@@ -4,7 +4,7 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## [1.5.0] - 2026-09-18
 
 ### Added
 
@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- `LICENSE` follows SDK License Template 1.9: section 1 says AGLedger LLC does not receive, inspect or use the data you process through your deployment and collects no product usage information from it; section 7 names AGLedger and Settlement Signal as trademarks of AGLedger LLC; section 8 refers to issued or pending U.S. patents.
 - **Credential precedence** is now: `--api-key` or `AGLEDGER_API_KEY`, then `AGLEDGER_OIDC_TOKEN_CMD`, then `AGLEDGER_OIDC_TOKEN_FILE`, then the stored profile's API key or token source. An API key set explicitly always wins. The no-credential error (`AUTH_REQUIRED`, exit 3) now names all three sources.
 - **`--dry-run`** names an OIDC token source (`credential: "oidc-cert"`, `oidcTokenSource`) without running it.
 - **`discover` checks `/health` without a credential**, so a token source or identity provider that is down does not also hide whether the Server is up.
