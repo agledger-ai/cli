@@ -117,8 +117,6 @@ export function envOidcSource(): OidcTokenSource | undefined {
   return undefined;
 }
 
-/** Whether a flag was passed on the command line (`--flag value` or `--flag=value`),
- *  as opposed to reaching oclif through its `env` binding. */
 /** The delegation token source from the environment. The command wins over the file. */
 export function envOnBehalfOfSource(): OidcTokenSource | undefined {
   const command = process.env[ON_BEHALF_OF_ENV.CMD];
@@ -128,6 +126,8 @@ export function envOnBehalfOfSource(): OidcTokenSource | undefined {
   return undefined;
 }
 
+/** Whether a flag was passed on the command line (`--flag value` or `--flag=value`),
+ *  as opposed to reaching oclif through its `env` binding. */
 export function argvHasFlag(flag: string): boolean {
   return process.argv.some((a) => a === flag || a.startsWith(`${flag}=`));
 }
@@ -142,6 +142,8 @@ export abstract class BaseCommand extends Command {
   /** The URL the most recent client was built for, so a network failure can
    *  name the host it actually tried. */
   private lastApiUrl?: string;
+  /** The client `callApi` built for this invocation, reused by every later call. */
+  private client?: ApiClient;
 
   static baseFlags = {
     json: Flags.boolean({ description: 'Force JSON output (default when stdout is piped)', default: false }),
@@ -376,8 +378,18 @@ export abstract class BaseCommand extends Command {
     path: string,
     options?: { query?: Record<string, unknown>; body?: unknown; idempotencyKey?: string },
   ): Promise<ApiResponse> {
-    const client = this.createApiClient(flags, { allowAnonymous: isPublicPath(method, path) });
-    return client.request(method, path, options);
+    const allowAnonymous = isPublicPath(method, path);
+    // One client per invocation. With an OIDC credential a new client means a
+    // new key pair and a new exchange, so rebuilding it per call (one per page
+    // under --paginate) spent a token per page: a token file 409s on the second
+    // exchange, and a command runs into the exchange route's rate limit.
+    if (!this.client) {
+      this.client = this.createApiClient(flags, { allowAnonymous });
+    } else if (this.client.isAnonymous && !allowAnonymous) {
+      // Same refusal a fresh client would give for a path that needs a credential.
+      this.createApiClient(flags, { allowAnonymous });
+    }
+    return this.client.request(method, path, options);
   }
 
   protected output(data: unknown): void {

@@ -8,7 +8,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../src/api-client.js';
+import { execSync } from 'node:child_process';
 import {
+  DelegationToken,
+  TOKEN_COMMAND_LIMITS,
   OidcCertCredential,
   OidcExchangeError,
   OidcTokenSourceError,
@@ -367,5 +370,199 @@ describe('exchange failures and secrecy', () => {
       b: { c: '<redacted-token>' },
       n: 1,
     });
+  });
+});
+
+describe('which 401s renew what', () => {
+  it('a refused X-Agent-Signature is surfaced with no re-exchange and no retry', async () => {
+    const h = harness(() =>
+      json(401, {
+        error: 'UNAUTHORIZED',
+        message: 'X-Agent-Signature does not verify against the ephemeral cert public key over the request body hash',
+      }),
+    );
+    const client = new ApiClient('https://api.test', new OidcCertCredential({ source: commandSource() }));
+    const res = await client.request('POST', '/v1/records', { body: { type: 'x' } });
+    expect(res.status).toBe(401);
+    expect(h.exchanges).toHaveLength(1);
+    expect(h.apiCalls).toHaveLength(1);
+  });
+
+  it('a refused delegation token is read again and the request retried once, with the same cert', async () => {
+    const delegations = [jwtFor('alice', 1), jwtFor('alice', 2)];
+    const dir = mkdtempSync(join(tmpdir(), 'obo-'));
+    const path = join(dir, 'token');
+    writeFileSync(path, delegations[0]!);
+    const h = harness((_url, init) => {
+      const obo = (init.headers as Record<string, string>)['AGLedger-On-Behalf-Of'];
+      if (obo === delegations[0]) {
+        // Rotate the file the way whatever writes it would.
+        writeFileSync(path, delegations[1]!);
+        return json(401, { message: 'AGLedger-On-Behalf-Of: token expired. Configure a trusted issuer.' });
+      }
+      return json(201, {});
+    });
+    const client = new ApiClient(
+      'https://api.test',
+      new OidcCertCredential({ source: commandSource() }),
+      '1.0.0',
+      undefined,
+      new DelegationToken({ kind: 'file', path, origin: 'AGLEDGER_ON_BEHALF_OF_FILE' }),
+    );
+    const res = await client.request('POST', '/v1/records', { body: { type: 'x' } });
+    expect(res.status).toBe(201);
+    expect(h.exchanges).toHaveLength(1);
+    expect(h.apiCalls.map(authOf)).toEqual(['Bearer cert-1', 'Bearer cert-1']);
+    expect(h.apiCalls.map((c) => (c.init.headers as Record<string, string>)['AGLedger-On-Behalf-Of'])).toEqual(delegations);
+  });
+
+  it('a delegation 401 is retried once only', async () => {
+    const h = harness(() => json(401, { detail: 'Delegation token could not be validated (trust-anchor lookup failed)' }));
+    const client = new ApiClient(
+      'https://api.test',
+      'agl_agt_x',
+      '1.0.0',
+      undefined,
+      new DelegationToken(commandSource(jwtFor('alice'))),
+    );
+    const res = await client.request('POST', '/v1/records', { body: {} });
+    expect(res.status).toBe(401);
+    expect(h.apiCalls).toHaveLength(2);
+  });
+});
+
+describe('refresh against the local clock', () => {
+  it('a local clock far ahead of the Server does not re-exchange on every request', async () => {
+    const h = harness(undefined, () => Date.now() - 10 * 60_000); // Server 10 min behind
+    const client = new ApiClient('https://api.test', new OidcCertCredential({ source: commandSource() }));
+    for (let i = 0; i < 4; i++) await client.request('GET', '/v1/records');
+    expect(h.exchanges).toHaveLength(1);
+  });
+
+  it('a failed refresh-point exchange keeps the still-valid cert, backs off, and fails only past expiry', async () => {
+    let now = Date.parse('2026-09-18T00:00:00Z');
+    let refuse = false;
+    const h = harness();
+    h.fetch.mockImplementation(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/v1/auth/oidc/cert')) {
+        h.exchanges.push(JSON.parse(String(init.body)));
+        if (refuse) return json(409, { detail: 'This OIDC token id has already been exchanged' });
+        return json(201, {
+          certJws: 'cert-1',
+          cert: { id: 'c1', issuedAt: new Date(now).toISOString(), expiresAt: new Date(now + 120_000).toISOString() },
+        });
+      }
+      h.apiCalls.push({ url, init });
+      return json(200, {});
+    });
+    const events: Array<Record<string, unknown>> = [];
+    const client = new ApiClient(
+      'https://api.test',
+      new OidcCertCredential({ source: commandSource(), now: () => now, log: (e) => events.push(e) }),
+    );
+    await client.request('GET', '/v1/records');
+    refuse = true;
+    now += 61_000; // past the refresh point, cert valid for 59s more
+    await client.request('GET', '/v1/records');
+    expect(h.exchanges).toHaveLength(2);
+    expect(authOf(h.apiCalls[1]!)).toBe('Bearer cert-1');
+    expect(events.some((e) => e.event === 'oidc-refresh-deferred')).toBe(true);
+    now += 5_000; // inside the back-off: no new attempt
+    await client.request('GET', '/v1/records');
+    expect(h.exchanges).toHaveLength(2);
+    now += 60_000; // past expiry
+    await expect(client.request('GET', '/v1/records')).rejects.toBeInstanceOf(OidcExchangeError);
+  });
+
+  it('a forced (401) re-exchange that fails is reported, not papered over', async () => {
+    let calls = 0;
+    const h = harness(() => json(401, {}));
+    h.fetch.mockImplementation(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/v1/auth/oidc/cert')) {
+        calls += 1;
+        if (calls > 1) return json(503, { detail: 'down' });
+        const t = Date.now();
+        return json(201, {
+          certJws: 'cert-1',
+          cert: { id: 'c1', issuedAt: new Date(t).toISOString(), expiresAt: new Date(t + 120_000).toISOString() },
+        });
+      }
+      h.apiCalls.push({ url, init });
+      return json(401, {});
+    });
+    const client = new ApiClient('https://api.test', new OidcCertCredential({ source: commandSource() }));
+    await expect(client.request('GET', '/v1/records')).rejects.toBeInstanceOf(OidcExchangeError);
+  });
+});
+
+describe('delegation token parity', () => {
+  const withExp = (exp: number | undefined) =>
+    `${b64url('{"alg":"RS256"}')}.${b64url(JSON.stringify({ sub: 'alice', ...(exp === undefined ? {} : { exp }) }))}.c2ln`;
+
+  it('a token with no exp is read again for every request', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'obo-'));
+    const path = join(dir, 'token');
+    const delegation = new DelegationToken({ kind: 'file', path, origin: 'AGLEDGER_ON_BEHALF_OF_FILE' });
+    writeFileSync(path, withExp(undefined));
+    expect(await delegation.get()).toBe(withExp(undefined));
+    const next = `${withExp(undefined)}x`;
+    writeFileSync(path, next);
+    expect(await delegation.get()).toBe(next);
+  });
+
+  it('an expired token is refused before sending, naming the variable', async () => {
+    const h = harness();
+    const expired = withExp(Math.floor(Date.now() / 1000) - 10);
+    const client = new ApiClient(
+      'https://api.test',
+      'agl_agt_x',
+      '1.0.0',
+      undefined,
+      new DelegationToken({ kind: 'command', command: `printf '%s' '${expired}'`, origin: 'AGLEDGER_ON_BEHALF_OF_CMD' }),
+    );
+    const err = (await client.request('POST', '/v1/records', { body: {} }).catch((e: unknown) => e)) as Error;
+    expect(err).toBeInstanceOf(OidcTokenSourceError);
+    expect(err.message).toMatch(/AGLEDGER_ON_BEHALF_OF_CMD: the delegation token expired/);
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+
+  it('a delegation token with no sub is explained in delegation terms', async () => {
+    const noSub = `${b64url('{"alg":"RS256"}')}.${b64url('{"exp":9999999999}')}.c2ln`;
+    const err = (await new DelegationToken({
+      kind: 'command',
+      command: `printf '%s' '${noSub}'`,
+      origin: 'AGLEDGER_ON_BEHALF_OF_CMD',
+    })
+      .get()
+      .catch((e: unknown) => e)) as Error;
+    expect(err.message).toContain('on behalf of');
+    expect(err.message).not.toContain('proof of possession');
+  });
+});
+
+describe('token command bounds', () => {
+  it('a timeout kills the whole pipeline, not only the shell', async () => {
+    const saved = TOKEN_COMMAND_LIMITS.timeoutMs;
+    TOKEN_COMMAND_LIMITS.timeoutMs = 300;
+    try {
+      const source: OidcTokenSource = { kind: 'command', command: 'sleep 31.7 | cat', origin: 'AGLEDGER_OIDC_TOKEN_CMD' };
+      await expect(fetchOidcToken(source)).rejects.toThrow(/did not finish within 0.3s/);
+      await new Promise((r) => setTimeout(r, 200));
+      const survivors = execSync('ps -eo args', { encoding: 'utf8' })
+        .split('\n')
+        .filter((line) => line.trim() === 'sleep 31.7');
+      expect(survivors).toEqual([]);
+    } finally {
+      TOKEN_COMMAND_LIMITS.timeoutMs = saved;
+    }
+  });
+
+  it('refuses stdout past the cap', async () => {
+    const source: OidcTokenSource = {
+      kind: 'command',
+      command: "head -c 70000 /dev/zero | tr '\\0' a",
+      origin: 'AGLEDGER_OIDC_TOKEN_CMD',
+    };
+    await expect(fetchOidcToken(source)).rejects.toThrow(/printed more than 64 KiB/);
   });
 });

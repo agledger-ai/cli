@@ -34,6 +34,8 @@ const run = (args: string, env?: Record<string, string>) => {
           AGLEDGER_OIDC_TOKEN_CMD: '',
           AGLEDGER_OIDC_TOKEN_FILE: '',
           AGLEDGER_OIDC_AGENT_ID: '',
+          AGLEDGER_ON_BEHALF_OF_CMD: '',
+          AGLEDGER_ON_BEHALF_OF_FILE: '',
           HOME: tmpdir(),
           ...env,
         },
@@ -1014,6 +1016,20 @@ describe('OIDC token sources', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
+  it('login --oidc with a token file saves without exchanging, so the token stays unspent', () => {
+    const home = isolatedHome();
+    const file = tmpJson('x');
+    writeFileSync(file, `${Buffer.from('{"alg":"RS256"}').toString('base64url')}.${Buffer.from('{"sub":"pod-a"}').toString('base64url')}.c2ln`);
+    // The URL is unreachable: any exchange attempt would fail with NETWORK_ERROR.
+    const result = run(`login --oidc --oidc-token-file ${file} --json --api-url ${unreachable}`, { HOME: home });
+    expect(result.exitCode).toBe(0);
+    const out = JSON.parse(result.stdout);
+    expect(out).toMatchObject({ saved: true, verified: false, tokenSource: 'file', oidcSub: 'pod-a' });
+    const cfg = JSON.parse(readFileSync(join(home, '.agledger', 'config.json'), 'utf8'));
+    expect(cfg.profiles.default.oidc).toEqual({ tokenFile: file });
+    rmSync(home, { recursive: true, force: true });
+  });
+
   it('login --oidc stores nothing when the token source fails', () => {
     const home = isolatedHome();
     const result = run(`login --oidc --json --api-url ${unreachable}`, {
@@ -1023,5 +1039,68 @@ describe('OIDC token sources', () => {
     expect(result.exitCode).toBe(3);
     expect(JSON.parse(run('config list --json', { HOME: home }).stdout).profiles).toEqual([]);
     rmSync(home, { recursive: true, force: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// --paginate under OIDC: one client, one exchange, for every page
+// ---------------------------------------------------------------------------
+describe('--paginate with an OIDC token source', () => {
+  it('exchanges once for the whole walk, as a token file requires', async () => {
+    const { createServer } = await import('node:http');
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    let exchanges = 0;
+    const bearers: string[] = [];
+    const server = createServer((req, res) => {
+      res.setHeader('content-type', 'application/json');
+      if (req.url === '/v1/auth/oidc/cert') {
+        exchanges += 1;
+        // The real Server refuses a token id it has already exchanged.
+        if (exchanges > 1) {
+          res.statusCode = 409;
+          res.end(JSON.stringify({ detail: 'This OIDC token id has already been exchanged' }));
+          return;
+        }
+        const t = Date.now();
+        res.statusCode = 201;
+        res.end(
+          JSON.stringify({
+            certJws: 'cert-1',
+            cert: { id: 'c1', issuedAt: new Date(t).toISOString(), expiresAt: new Date(t + 600_000).toISOString() },
+          }),
+        );
+        return;
+      }
+      bearers.push(String(req.headers.authorization));
+      const page = Number(new URL(req.url ?? '/', 'http://x').searchParams.get('cursor') ?? '0');
+      res.end(JSON.stringify({ data: [{ n: page }], hasMore: page < 2, nextCursor: String(page + 1) }));
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const port = (server.address() as { port: number }).port;
+    const file = tmpJson('x');
+    writeFileSync(
+      file,
+      `${Buffer.from('{"alg":"RS256"}').toString('base64url')}.${Buffer.from('{"sub":"a"}').toString('base64url')}.c2ln`,
+    );
+    try {
+      const { stdout } = await promisify(execFile)('node', [BIN, 'api', 'GET', '/v1/records', '--paginate', '--json'], {
+        env: {
+          ...process.env,
+          AGLEDGER_API_KEY: '',
+          AGLEDGER_OIDC_TOKEN_CMD: '',
+          AGLEDGER_ON_BEHALF_OF_CMD: '',
+          AGLEDGER_ON_BEHALF_OF_FILE: '',
+          AGLEDGER_API_URL: `http://127.0.0.1:${port}`,
+          AGLEDGER_OIDC_TOKEN_FILE: file,
+          HOME: isolatedHome(),
+        },
+      });
+      expect(stdout.trim().split('\n').map((l) => JSON.parse(l).n)).toEqual([0, 1, 2]);
+      expect(exchanges).toBe(1);
+      expect(bearers).toEqual(['Bearer cert-1', 'Bearer cert-1', 'Bearer cert-1']);
+    } finally {
+      server.close();
+    }
   });
 });
