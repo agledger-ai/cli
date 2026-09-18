@@ -1,3 +1,4 @@
+import { ApiClient } from '../api-client.js';
 import { BaseCommand } from '../base.js';
 
 /**
@@ -20,8 +21,11 @@ export default class Discover extends BaseCommand {
     // unauthenticated, and /v1/auth/me simply reports no identity.
     const client = this.createApiClient(flags, { allowAnonymous: true });
 
+    // /health goes without a credential, so a token source or IdP that is down
+    // does not also hide whether the Server is up.
+    const anonymous = new ApiClient(client.baseUrl, null, this.config.version);
     const [health, identity] = await Promise.allSettled([
-      client.request('GET', '/health'),
+      anonymous.request('GET', '/health'),
       client.request('GET', '/v1/auth/me'),
     ]);
 

@@ -32,7 +32,12 @@ export default class Docs extends BaseCommand {
     const client = this.createApiClient(flags, { allowAnonymous: true });
     const path = flags.full ? '/llms-full.txt' : '/llms.txt';
 
-    const res = await client.request('GET', path);
+    let res;
+    try {
+      res = await client.request('GET', path);
+    } catch (err) {
+      this.handleError(err);
+    }
     const text =
       res.body && typeof res.body === 'object' && '_raw' in res.body
         ? String((res.body as { _raw: unknown })._raw)
