@@ -309,8 +309,16 @@ export class OidcCertCredential {
       const clean = scrub(parsed, token) as Record<string, unknown>;
       const detail =
         typeof clean.detail === 'string' ? clean.detail : typeof clean.message === 'string' ? clean.message : '';
+      // The Server exchanges a token id once. A token file returns the same
+      // token until whatever writes it rotates it, so every CLI run after the
+      // first lands here until then.
+      const reuseHint =
+        res.status === 409 && this.source.kind === 'file'
+          ? ` The file at ${this.source.path} still holds a token this Server has already exchanged, and each token can be exchanged once. ` +
+            'Run again after the file rotates, or set AGLEDGER_OIDC_TOKEN_CMD to a command that mints a new token each run (for example `kubectl create token <service-account>`).'
+          : '';
       throw new OidcExchangeError(
-        `OIDC cert exchange failed (token from ${this.source.origin}): POST /v1/auth/oidc/cert returned ${res.status}${detail ? `: ${detail}` : ''}`,
+        `OIDC cert exchange failed (token from ${this.source.origin}): POST /v1/auth/oidc/cert returned ${res.status}${detail ? `: ${detail}` : ''}${reuseHint ? `.${reuseHint}` : ''}`,
         res.status,
         clean,
         this.source.origin,

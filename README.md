@@ -159,7 +159,7 @@ issuer on the Server.
 | Variable | What it holds |
 |---|---|
 | `AGLEDGER_OIDC_TOKEN_CMD` | A shell command whose stdout is an OIDC JWT, run on every exchange: `gcloud auth print-identity-token`, `az account get-access-token`, `vault`, `kubectl create token`, or your own script |
-| `AGLEDGER_OIDC_TOKEN_FILE` | A file holding an OIDC JWT, read on every exchange, such as a projected service-account token that Kubernetes rotates on disk |
+| `AGLEDGER_OIDC_TOKEN_FILE` | A file holding an OIDC JWT, read on every exchange, such as a projected service-account token that Kubernetes rotates on disk. The Server exchanges each token once, so one file token serves one CLI run until the file rotates; for repeated runs, prefer a command that mints a new token |
 | `AGLEDGER_OIDC_AGENT_ID` | Optional. The agent the cert binds to, when the token does not map to one itself |
 
 ```bash
