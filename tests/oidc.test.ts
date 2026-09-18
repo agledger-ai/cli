@@ -315,6 +315,37 @@ describe('exchange failures and secrecy', () => {
     expect((err.body as { recoveryHint: string }).recoveryHint).toBe('Acquire a fresh OIDC token.');
   });
 
+  it('a 409 on a token file explains that the file has not rotated and names the command source', async () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'agl-oidc-')), 'token');
+    writeFileSync(path, FIXED_JWT);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        json(409, { error: 'CONFLICT', detail: 'This OIDC token id has already been exchanged for a cert from this issuer' }),
+      ),
+    );
+    const source: OidcTokenSource = { kind: 'file', path, origin: 'AGLEDGER_OIDC_TOKEN_FILE' };
+    const client = new ApiClient('https://api.test', new OidcCertCredential({ source }));
+    const err = (await client.request('GET', '/v1/auth/me').catch((e: unknown) => e)) as OidcExchangeError;
+    expect(err).toBeInstanceOf(OidcExchangeError);
+    expect(err.status).toBe(409);
+    expect(err.message).toContain(`The file at ${path} still holds a token this Server has already exchanged`);
+    expect(err.message).toContain('AGLEDGER_OIDC_TOKEN_CMD');
+    expect(err.message).not.toContain(FIXED_JWT);
+  });
+
+  it('a 409 on a token command carries no file hint', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json(409, { error: 'CONFLICT', detail: 'already exchanged' })),
+    );
+    const client = new ApiClient('https://api.test', new OidcCertCredential({ source: commandSource() }));
+    const err = (await client.request('GET', '/v1/auth/me').catch((e: unknown) => e)) as OidcExchangeError;
+    expect(err.message).toBe(
+      'OIDC cert exchange failed (token from AGLEDGER_OIDC_TOKEN_CMD): POST /v1/auth/oidc/cert returned 409: already exchanged',
+    );
+  });
+
   it('diagnostics never carry the OIDC token or the cert', async () => {
     harness();
     const events: string[] = [];
