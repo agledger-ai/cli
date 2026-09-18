@@ -14,6 +14,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { execSync } from 'node:child_process';
+import { generateKeyPairSync } from 'node:crypto';
 import { writeFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -698,6 +699,78 @@ describe('verify command', () => {
   it('usage error exit 2 on missing file arg', () => {
     const result = run('verify --json');
     expect(result.exitCode).toBe(2);
+  });
+
+  // A live 1.8.0 export whose create, completion and verdict were sent under a
+  // cert with signed bodies, and the cert's public key as the agent kept it.
+  const LIVE = resolve(import.meta.dirname, '../testdata/live-1.8.0');
+
+  it('counts sealed agent signatures but checks none without --agent-keys', () => {
+    const result = run(`verify ${LIVE}/export-cert-lifecycle.json --json`);
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.agentSignatures).toEqual({ present: 6, verified: 0 });
+    expect(parsed.optionalChecks.agent_signature).toBe('skipped_no_input');
+  });
+
+  it('re-verifies every sealed agent signature with --agent-keys, unwrapping {publicKeyJwk}', () => {
+    const result = run(`verify ${LIVE}/export-cert-lifecycle.json --agent-keys ${LIVE}/agent-cert-key.json --json`);
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.valid).toBe(true);
+    expect(parsed.agentSignatures).toEqual({ present: 6, verified: 6 });
+    expect(parsed.optionalChecks.agent_signature).toBe('applied');
+  });
+
+  it('accepts a bare JWK list and a JWK Set', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agl-agent-keys-'));
+    const jwk = JSON.parse(readFileSync(`${LIVE}/agent-cert-key.json`, 'utf8')).publicKeyJwk;
+    for (const [name, body] of [['list.json', [jwk]], ['set.json', { keys: [jwk] }]] as const) {
+      writeFileSync(join(dir, name), JSON.stringify(body));
+      const result = run(`verify ${LIVE}/export-cert-lifecycle.json --agent-keys ${join(dir, name)} --json`);
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(result.stdout).agentSignatures.verified).toBe(6);
+    }
+  });
+
+  it('a key for another cert matches nothing and verifies nothing', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agl-agent-keys-'));
+    const other = generateKeyPairSync('ed25519').publicKey.export({ format: 'jwk' });
+    writeFileSync(join(dir, 'other.json'), JSON.stringify([other]));
+    const result = run(`verify ${LIVE}/export-cert-lifecycle.json --agent-keys ${join(dir, 'other.json')} --json`);
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout).agentSignatures).toEqual({ present: 6, verified: 0 });
+  });
+
+  // Human output needs a TTY (piped stdout means JSON), so run under script(1).
+  const human = (args: string): string =>
+    execSync(`script -qec ${JSON.stringify(`node ${BIN} ${args}`)} /dev/null`, {
+      encoding: 'utf-8',
+      env: { ...process.env, HOME: tmpdir(), NO_COLOR: '1' },
+    });
+
+  it('human output says how many agent signatures were checked, and PASS speaks for the Server signatures only', () => {
+    const none = human(`verify ${LIVE}/export-cert-lifecycle.json`);
+    expect(none).toContain('Agent signatures: 6 sealed on the chain, not checked. Pass --agent-keys');
+    expect(none).toContain('every Server signature verified');
+    expect(none).not.toContain('every signature verified');
+
+    const dir = mkdtempSync(join(tmpdir(), 'agl-agent-keys-'));
+    writeFileSync(join(dir, 'other.json'), JSON.stringify([generateKeyPairSync('ed25519').publicKey.export({ format: 'jwk' })]));
+    const miss = human(`verify ${LIVE}/export-cert-lifecycle.json --agent-keys ${join(dir, 'other.json')}`);
+    expect(miss).toContain('0/6 re-verified offline; 6 name a key that is not in --agent-keys and were not checked');
+    expect(miss).not.toContain('Pass --agent-keys');
+
+    const all = human(`verify ${LIVE}/export-cert-lifecycle.json --agent-keys ${LIVE}/agent-cert-key.json`);
+    expect(all).toContain('Agent signatures: 6/6 re-verified offline against --agent-keys.');
+  });
+
+  it('refuses a file that is not an Ed25519 JWK with a usage error', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agl-agent-keys-'));
+    writeFileSync(join(dir, 'bad.json'), JSON.stringify({ kty: 'OKP', crv: 'Ed25519' }));
+    const result = run(`verify ${LIVE}/export-cert-lifecycle.json --agent-keys ${join(dir, 'bad.json')} --json`);
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout + result.stderr).toContain('INVALID_JSON_INPUT');
   });
 });
 

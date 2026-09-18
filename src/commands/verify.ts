@@ -1,6 +1,7 @@
 import { Args, Flags } from '@oclif/core';
 import {
   verifyAuditExport,
+  type AgentPublicKeyJwk,
   type OutOfBandKeyEntry,
   type VerifyExportResult,
   type RecordAuditExportInput,
@@ -21,6 +22,7 @@ export default class Verify extends BaseCommand {
   static override examples = [
     '<%= config.bin %> verify audit-export.json',
     '<%= config.bin %> verify audit-export.json --keys vault-keys.json',
+    '<%= config.bin %> verify audit-export.json --agent-keys agent-jwks.json',
     '<%= config.bin %> verify audit-export.json --json',
     'cat audit-export.json | <%= config.bin %> verify -',
   ];
@@ -42,6 +44,14 @@ export default class Verify extends BaseCommand {
         'raw GET /v1/verification-keys response envelope ({data:[...], ...}, the ' +
         '.data array is unwrapped automatically). Merged over any keys embedded ' +
         'in the export.',
+    }),
+    'agent-keys': Flags.string({
+      description:
+        'Path to a JSON file holding Ed25519 public keys of agent certs: a JWK, a list of JWKs, ' +
+        'or a {keys:[...]} JWK Set (an entry may wrap its key as {publicKeyJwk:{...}}). Each is the publicKeyJwk an agent sent at cert exchange ' +
+        '(also the cnf.jwk claim in its certJws). An entry whose sealed agent signature names one ' +
+        'of them by thumbprint has that signature re-verified offline, and fails ' +
+        'CHAIN_AGENT_SIGNATURE_INVALID if it does not verify.',
     }),
     'require-key-id': Flags.string({
       description:
@@ -85,6 +95,16 @@ export default class Verify extends BaseCommand {
         )
       : undefined;
 
+    const agentKeys = flags['agent-keys']
+      ? this.unwrapAgentKeys(
+          this.readJsonSource(
+            flags['agent-keys'],
+            'agent keys',
+            'The --agent-keys file must be an Ed25519 JWK, a list of them, or a {keys:[...]} JWK Set.',
+          ),
+        )
+      : undefined;
+
     // verify-core throws TypeError at the OOB-key boundary when the file's
     // shape is wrong (e.g. {keyId: 42}, [null], "..."). Catch it so the CLI
     // emits its structured-error envelope rather than oclif's raw exception
@@ -96,6 +116,7 @@ export default class Verify extends BaseCommand {
         publicKeys,
         requireKeyId: flags['require-key-id'],
         requireOutOfBandKeys: flags['require-out-of-band-keys'],
+        agentKeys,
       });
     } catch (err) {
       if (err instanceof TypeError) {
@@ -104,7 +125,8 @@ export default class Verify extends BaseCommand {
           err.message,
           ExitCode.USAGE_ERROR,
           'The --keys file must be a {keyId: SPKI-DER-base64} map or a list of ' +
-            '{keyId, publicKey, ...} entries (the .data list from /v1/verification-keys).',
+            '{keyId, publicKey, ...} entries (the .data list from /v1/verification-keys); ' +
+            'the --agent-keys file must hold Ed25519 JWKs ({"kty":"OKP","crv":"Ed25519","x":"..."}).',
         );
       }
       throw err;
@@ -113,7 +135,7 @@ export default class Verify extends BaseCommand {
     if (this.isJson) {
       this.output(result);
     } else {
-      this.renderHuman(result);
+      this.renderHuman(result, agentKeys !== undefined);
     }
 
     if (!result.valid) this.exit(ExitCode.GENERAL_ERROR);
@@ -139,7 +161,25 @@ export default class Verify extends BaseCommand {
     return raw as Record<string, string> | ReadonlyArray<OutOfBandKeyEntry>;
   }
 
-  private renderHuman(result: VerifyExportResult): void {
+  /**
+   * A single JWK, a list of JWKs, or a `{keys: [...]}` JWK Set, as a list. An
+   * entry that wraps its key as `{ publicKeyJwk: {...} }` (how an agent records
+   * the key it sent at cert exchange) is unwrapped. verify-core validates each.
+   */
+  private unwrapAgentKeys(raw: unknown): AgentPublicKeyJwk[] {
+    const list: unknown[] = Array.isArray(raw)
+      ? raw
+      : raw && typeof raw === 'object' && Array.isArray((raw as { keys?: unknown }).keys)
+        ? (raw as { keys: unknown[] }).keys
+        : [raw];
+    return list.map((entry) =>
+      entry && typeof entry === 'object' && 'publicKeyJwk' in entry
+        ? (entry as { publicKeyJwk: AgentPublicKeyJwk }).publicKeyJwk
+        : (entry as AgentPublicKeyJwk),
+    );
+  }
+
+  private renderHuman(result: VerifyExportResult, agentKeysGiven: boolean): void {
     if (this.isQuiet) return;
 
     const out = process.stdout;
@@ -149,8 +189,25 @@ export default class Verify extends BaseCommand {
       `       Entries: ${result.verifiedEntries}/${result.totalEntries} verified\n`,
     );
 
+    // Agent signatures are checked only against keys the caller supplies, so
+    // the lines below say exactly how many were, and the PASS line speaks for
+    // the Server's signatures alone.
+    const { present, verified } = result.agentSignatures;
+    const unchecked = present - verified;
+    if (present > 0 && unchecked === 0) {
+      out.write(`       Agent signatures: ${verified}/${present} re-verified offline against --agent-keys.\n`);
+    } else if (present > 0 && agentKeysGiven) {
+      out.write(
+        `       Agent signatures: ${verified}/${present} re-verified offline; ${unchecked} name a key that is not in --agent-keys and were not checked.\n`,
+      );
+    } else if (present > 0) {
+      out.write(
+        `       Agent signatures: ${present} sealed on the chain, not checked. Pass --agent-keys with the agents' public keys to re-verify them.\n`,
+      );
+    }
+
     if (result.valid) {
-      out.write('       Hash chain contiguous, every signature verified.\n');
+      out.write('       Hash chain contiguous, every Server signature verified.\n');
       return;
     }
 

@@ -731,6 +731,7 @@
       "examples": [
         "<%= config.bin %> verify audit-export.json",
         "<%= config.bin %> verify audit-export.json --keys vault-keys.json",
+        "<%= config.bin %> verify audit-export.json --agent-keys agent-jwks.json",
         "<%= config.bin %> verify audit-export.json --json",
         "cat audit-export.json | <%= config.bin %> verify -"
       ],
@@ -779,6 +780,13 @@
         "keys": {
           "description": "Path to a JSON file holding out-of-band public keys. Accepts a {keyId: SPKI-DER-base64} map, a [{keyId, publicKey, ...}] list, or the raw GET /v1/verification-keys response envelope ({data:[...], ...}, the .data array is unwrapped automatically). Merged over any keys embedded in the export.",
           "name": "keys",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "agent-keys": {
+          "description": "Path to a JSON file holding Ed25519 public keys of agent certs: a JWK, a list of JWKs, or a {keys:[...]} JWK Set (an entry may wrap its key as {publicKeyJwk:{...}}). Each is the publicKeyJwk an agent sent at cert exchange (also the cnf.jwk claim in its certJws). An entry whose sealed agent signature names one of them by thumbprint has that signature re-verified offline, and fails CHAIN_AGENT_SIGNATURE_INVALID if it does not verify.",
+          "name": "agent-keys",
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
