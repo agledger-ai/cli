@@ -127,7 +127,7 @@ agledger api GET /openapi.json          # Full API route catalog
 | `logout` | Remove profile(s) |
 | `auth` | Check current login state and show the identity, including the OIDC cert (exit 0 when nothing is configured) |
 | `config` | `list` / `get` / `use <profile>` / `path` |
-| `verify` | Offline audit export verification (COSE_Sign1, RFC 9052; Ed25519 or ES256; no network) |
+| `verify` | Offline audit export verification (COSE_Sign1, RFC 9052; Ed25519 or ES256; no network). `--agent-keys <file>` re-verifies the agent signatures sealed on the chain against the cert keys you supply |
 | `docs` | Fetch the API's agent-oriented narrative (`llms.txt` / `--full`) |
 | `list-commands` | Inventory (this list) |
 | `help-json` | Per-command schema |
