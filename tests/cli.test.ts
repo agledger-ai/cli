@@ -788,7 +788,18 @@ describe('verify command: conformance corpus (manifest-export.json)', () => {
     expect: 'pass' | 'fail';
     failureCode?: string;
     brokenAt?: number;
-    options?: { keysFile?: string; requireKeyId?: string; requireOutOfBandKeys?: boolean };
+    options?: {
+      keysFile?: string;
+      requireKeyId?: string;
+      requireOutOfBandKeys?: boolean;
+      /**
+       * A JSON array of agent cert public keys. Unmapped, a vector expecting
+       * CHAIN_AGENT_SIGNATURE_INVALID runs with no agent keys, the check
+       * reports skipped_no_input, the export passes, and the suite fails on a
+       * vector that was never actually exercised.
+       */
+      agentKeysFile?: string;
+    };
   }
   const manifest = JSON.parse(
     readFileSync(join(CONFORMANCE, 'manifest-export.json'), 'utf-8'),
@@ -804,6 +815,9 @@ describe('verify command: conformance corpus (manifest-export.json)', () => {
         ? ` --keys ${join(CONFORMANCE, vector.options.keysFile)}`
         : '';
       if (vector.options?.requireKeyId) flags += ` --require-key-id ${vector.options.requireKeyId}`;
+      if (vector.options?.agentKeysFile) {
+        flags += ` --agent-keys ${join(CONFORMANCE, vector.options.agentKeysFile)}`;
+      }
       if (vector.options?.requireOutOfBandKeys) flags += ' --require-out-of-band-keys';
       const result = run(`verify ${join(CONFORMANCE, vector.file)}${flags} --json`);
       const parsed = JSON.parse(result.stdout) as {
