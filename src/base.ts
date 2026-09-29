@@ -185,7 +185,8 @@ export abstract class BaseCommand extends Command {
    *
    * Explicit per-invocation sources outrank stored ones, which is the rule the
    * API key already followed. `AGLEDGER_OIDC_AGENT_ID` overrides a profile's
-   * stored agent id.
+   * stored agent id. That id is only an assertion sent on the exchange: the
+   * token decides the agent, and the Server refuses a mismatch.
    */
   protected resolveCredential(flags: AuthFlags): { credential: ResolvedCredential; profileName?: string; profile?: Profile } {
     const config = readConfig();

@@ -156,11 +156,22 @@ of an API key. The CLI runs a token source you name, exchanges the token at
 that cert as the bearer. Your operator first registers the IdP as a trusted
 issuer on the Server.
 
+**The token decides which agent the cert binds to**, never the CLI. An
+administrator binds an agent to the token's identity in one of two ways:
+`PATCH /v1/agents/{id}` with `oidcIss` and `oidcSub` (the token's issuer and
+subject), or a `claimMapping` of `agent_id` on the trusted issuer, which reads
+the agent id from a claim in the token. An issuer that auto-provisions agents
+creates one for an unbound subject instead. A token that binds no agent is
+refused, and the Server's `recoveryHint` says which binding is missing. A
+token bound to a federation shadow agent (one listed at `GET /v1/peer-agents`)
+is refused with 403 `SHADOW_AGENT_CERT_FORBIDDEN`: that agent authenticates on
+its own Server.
+
 | Variable | What it holds |
 |---|---|
 | `AGLEDGER_OIDC_TOKEN_CMD` | A shell command whose stdout is an OIDC JWT, run on every exchange: `gcloud auth print-identity-token`, `az account get-access-token`, `vault`, `kubectl create token`, or your own script |
 | `AGLEDGER_OIDC_TOKEN_FILE` | A file holding an OIDC JWT, read on every exchange, such as a projected service-account token that Kubernetes rotates on disk. The Server exchanges each token once, so one file token serves one CLI run until the file rotates; for repeated runs, prefer a command that mints a new token |
-| `AGLEDGER_OIDC_AGENT_ID` | Optional. The agent the cert binds to, when the token does not map to one itself |
+| `AGLEDGER_OIDC_AGENT_ID` | Optional. An assertion of the agent id the token binds to, sent on the exchange. It never chooses the agent: when it names a different one, or the token binds none, the Server refuses the exchange with 403 `CERT_AGENT_BINDING_MISMATCH` rather than issue a cert for an agent you did not expect. Leave it unset unless you want that check |
 
 ```bash
 unset AGLEDGER_API_KEY   # an API key outranks a token source
@@ -204,7 +215,7 @@ agledger api POST /v1/records -F type=notarize-generic-v1 -F criteria.summary='e
 
 **Credential precedence** (highest first), applied per command:
 
-- **Credential:** `--api-key` flag → `AGLEDGER_API_KEY` env → `AGLEDGER_OIDC_TOKEN_CMD` → `AGLEDGER_OIDC_TOKEN_FILE` → stored profile (`--profile <name>`, else the active profile), whose API key or OIDC token source is used. `AGLEDGER_OIDC_AGENT_ID` overrides a profile's stored agent id.
+- **Credential:** `--api-key` flag → `AGLEDGER_API_KEY` env → `AGLEDGER_OIDC_TOKEN_CMD` → `AGLEDGER_OIDC_TOKEN_FILE` → stored profile (`--profile <name>`, else the active profile), whose API key or OIDC token source is used. `AGLEDGER_OIDC_AGENT_ID` overrides a profile's stored agent id (an assertion, as above).
 - **API URL:** `--api-url` flag → `AGLEDGER_API_URL` env → stored profile URL. There is no default: AGLedger is self-hosted, so a call with no URL from any of those three sources exits 2 with `CONFIG_ERROR` rather than guessing a host.
 
 So once you `agledger login`, plain `agledger api ...` calls authenticate from the stored profile with no flags or env. `--dry-run` echoes the resolved auth (URL, source, masked key, or the name of the OIDC token source, which it does not run) so you can confirm which credentials a call would use without sending it; when no URL is configured it reports `apiUrl: null` and names the error the real call would raise.

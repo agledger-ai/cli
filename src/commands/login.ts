@@ -41,7 +41,11 @@ export default class Login extends BaseCommand {
       env: OIDC_ENV.TOKEN_FILE,
     }),
     'oidc-agent-id': Flags.string({
-      description: 'With --oidc: the agent the cert binds to, when the token does not map to one itself.',
+      description:
+        'With --oidc: an optional assertion of the agent id the token binds to. The token decides the agent, never this ' +
+        'value: when it names a different agent, or the token binds none, the exchange fails 403 ' +
+        'CERT_AGENT_BINDING_MISMATCH instead of issuing a cert. To bind an agent, an administrator sets oidcIss/oidcSub ' +
+        'on it (PATCH /v1/agents/{id}) or maps an agent_id claim on the trusted issuer (claimMapping.agent_id).',
       env: OIDC_ENV.AGENT_ID,
     }),
   };
