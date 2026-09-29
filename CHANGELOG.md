@@ -4,6 +4,17 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] - 2026-09-28
+
+### Added
+
+- **`agledger verify` reports an unsigned entry written while the vault was signing.** An entry with no signing key fails with the new `CHAIN_ENTRY_UNSIGNED` when an earlier entry in its chain names a key, or when it was written at or after the earliest activation time among the keys the verifier holds. An unsigned history written before the first key stays reduced coverage, as before. An entry that names a key but carries an all-zero signature now fails `CHAIN_SIGNATURE_INVALID`. Both match the Server's own chain verification. Requires `@agledger/verify-core` 1.6.0.
+
+### Changed
+
+- **`AGLEDGER_OIDC_AGENT_ID` and `login --oidc-agent-id` are documented as an assertion, not a choice of agent.** The Server binds a cert to the agent the token names (a mapped `agent_id` claim, else the agent carrying the token's `oidcIss`/`oidcSub`, else an auto-provisioned one), and never to one the request body chooses. When the id names a different agent, or the token binds none, the exchange is refused with 403 `CERT_AGENT_BINDING_MISMATCH`; a token bound to a federation shadow agent is refused with 403 `SHADOW_AGENT_CERT_FORBIDDEN`. The flag's help, the README and `SKILL.md` now say so, and point at binding the agent instead: `PATCH /v1/agents/{id}` with `oidcIss` and `oidcSub`, or `claimMapping.agent_id` on the trusted issuer. The CLI still sends the id when it is set, and the refusal still fails with `OIDC_EXCHANGE_FAILED` (exit 4 on a 403) carrying the Server's error body and its `recoveryHint` under `apiError`.
+- **Conformance corpus regenerated** from agledger-api `cea0f7d5`: the same 32 export vectors with the same expected outcomes and failure codes.
+
 ## [1.5.0] - 2026-09-21
 
 ### Added
