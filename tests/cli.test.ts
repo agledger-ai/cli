@@ -1191,3 +1191,70 @@ describe('--paginate with an OIDC token source', () => {
     }
   });
 });
+
+describe('a refused OIDC cert exchange reaches the user', () => {
+  it('AGLEDGER_OIDC_AGENT_ID is sent as an assertion, and a 403 CERT_AGENT_BINDING_MISMATCH forwards its recoveryHint and exits 4', async () => {
+    const { createServer } = await import('node:http');
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    const recoveryHint =
+      'Bind the agent to this identity, then retry with agentId omitted (or equal to that agent). ' +
+      'PATCH /v1/agents/agent-2 with { "oidcIss": "https://idp.example", "oidcSub": "<the sub in your token>" }';
+    let sentAgentId: unknown;
+    const server = createServer((req, res) => {
+      let raw = '';
+      req.on('data', (d: Buffer) => (raw += d.toString('utf8')));
+      req.on('end', () => {
+        res.setHeader('content-type', 'application/json');
+        if (req.url === '/v1/auth/oidc/cert') {
+          sentAgentId = (JSON.parse(raw) as { agentId?: unknown }).agentId;
+          res.statusCode = 403;
+          res.end(
+            JSON.stringify({
+              type: '/problems/forbidden',
+              title: 'Forbidden',
+              status: 403,
+              detail: 'The body names agent agent-2, but this token binds to no agent.',
+              error: 'CERT_AGENT_BINDING_MISMATCH',
+              message: 'The body names agent agent-2, but this token binds to no agent.',
+              recoveryHint,
+              retryable: false,
+            }),
+          );
+          return;
+        }
+        res.statusCode = 500;
+        res.end('{}');
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const port = (server.address() as { port: number }).port;
+    const jwt = `${Buffer.from('{"alg":"RS256"}').toString('base64url')}.${Buffer.from('{"sub":"a"}').toString('base64url')}.c2ln`;
+    try {
+      const failed = (await promisify(execFile)('node', [BIN, 'api', 'GET', '/v1/auth/me', '--json'], {
+        env: {
+          ...process.env,
+          AGLEDGER_API_KEY: '',
+          AGLEDGER_OIDC_TOKEN_FILE: '',
+          AGLEDGER_ON_BEHALF_OF_CMD: '',
+          AGLEDGER_ON_BEHALF_OF_FILE: '',
+          AGLEDGER_API_URL: `http://127.0.0.1:${port}`,
+          AGLEDGER_OIDC_TOKEN_CMD: `printf '%s' '${jwt}'`,
+          AGLEDGER_OIDC_AGENT_ID: 'agent-2',
+          HOME: isolatedHome(),
+        },
+      }).catch((e: unknown) => e)) as { code?: number; stderr?: string };
+      expect(sentAgentId).toBe('agent-2');
+      expect(failed.code).toBe(4);
+      const err = JSON.parse(String(failed.stderr).trim().split('\n').at(-1) ?? '{}');
+      expect(err.code).toBe('OIDC_EXCHANGE_FAILED');
+      expect(err.status).toBe(403);
+      expect(err.message).toContain('this token binds to no agent');
+      expect(err.apiError.error).toBe('CERT_AGENT_BINDING_MISMATCH');
+      expect(err.apiError.recoveryHint).toBe(recoveryHint);
+      expect(String(failed.stderr)).not.toContain(jwt);
+    } finally {
+      server.close();
+    }
+  });
+});
