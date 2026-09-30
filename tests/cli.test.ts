@@ -1216,7 +1216,6 @@ describe('a refused OIDC cert exchange reaches the user', () => {
               status: 403,
               detail: 'The body names agent agent-2, but this token binds to no agent.',
               error: 'CERT_AGENT_BINDING_MISMATCH',
-              message: 'The body names agent agent-2, but this token binds to no agent.',
               recoveryHint,
               retryable: false,
             }),
