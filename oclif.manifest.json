@@ -729,6 +729,7 @@
       },
       "description": "Verify a record audit export offline (COSE_Sign1 envelope, RFC 9052; Ed25519 or ES256).",
       "examples": [
+        "<%= config.bin %> verify audit-export.json --trust-anchor sha256:<64 hex>",
         "<%= config.bin %> verify audit-export.json",
         "<%= config.bin %> verify audit-export.json --keys vault-keys.json",
         "<%= config.bin %> verify audit-export.json --agent-keys agent-jwks.json",
@@ -778,10 +779,24 @@
           "type": "boolean"
         },
         "keys": {
-          "description": "Path to a JSON file holding out-of-band public keys. Accepts a {keyId: SPKI-DER-base64} map, a [{keyId, publicKey, ...}] list, or the raw GET /v1/verification-keys response envelope ({data:[...], ...}, the .data array is unwrapped automatically). Merged over any keys embedded in the export.",
+          "description": "Path to a JSON file holding public keys you supply. Accepts a {keyId: SPKI-DER-base64} map, a [{keyId, publicKey, ...}] list, or the raw GET /v1/verification-keys response envelope ({data:[...], ...}, the .data array is unwrapped automatically, and each key's signed statements are walked with --trust-anchor). Merged over any keys embedded in the export. Where a key came from is not whether it is trusted: that is --trust-anchor.",
           "name": "keys",
           "hasDynamicHelp": false,
           "multiple": false,
+          "type": "option"
+        },
+        "trust-anchor": {
+          "description": "sha256:<64 hex> SPKI digest of a vault key you took out of band (the installer prints the first vault key's; the Server's signing-key-digest.js derives one from any key you hold). The signed key statements the export carries are walked from it: an entry signed by a key the walk does not reach fails CHAIN_SIGNING_KEY_UNANCHORED, and a statement that does not hold fails KEY_STATEMENT_INVALID, KEY_CLOSURE_INVALID or CHAIN_KEY_WINDOW_DRIFT. Without one, a pass rests on keys nobody pinned. Repeatable.",
+          "name": "trust-anchor",
+          "hasDynamicHelp": false,
+          "multiple": true,
+          "type": "option"
+        },
+        "distrusted-key": {
+          "description": "sha256:<64 hex>, optionally @<RFC 3339 instant>: a key the operator distrusts, as in the Server's VAULT_DISTRUSTED_KEYS. What it signed from that instant (with none, from its retirement) counts for nothing in the walk. Requires --trust-anchor. Repeatable.",
+          "name": "distrusted-key",
+          "hasDynamicHelp": false,
+          "multiple": true,
           "type": "option"
         },
         "agent-keys": {
@@ -798,9 +813,9 @@
           "multiple": false,
           "type": "option"
         },
-        "require-out-of-band-keys": {
-          "description": "High-assurance: refuse keys embedded in the export. Verifying the engine against its own embedded key is not an independent audit, so supply keys via --keys instead.",
-          "name": "require-out-of-band-keys",
+        "require-supplied-keys": {
+          "description": "Refuse keys embedded in the export: an entry whose only key is export-embedded fails CHAIN_KEY_POLICY_VIOLATION, so every signature is checked against a key from --keys.",
+          "name": "require-supplied-keys",
           "allowNo": false,
           "type": "boolean"
         }

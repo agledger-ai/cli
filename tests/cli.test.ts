@@ -677,7 +677,7 @@ describe('verify command', () => {
     writeFileSync(keysFile, JSON.stringify(envelope));
     try {
       const result = run(
-        `verify ${VECTORS}/valid.json --keys ${keysFile} --require-out-of-band-keys --json`,
+        `verify ${VECTORS}/valid.json --keys ${keysFile} --require-supplied-keys --json`,
       );
       expect(result.exitCode).toBe(0);
       expect(JSON.parse(result.stdout).valid).toBe(true);
@@ -694,6 +694,43 @@ describe('verify command', () => {
     const parsed = JSON.parse(result.stdout);
     const broken = parsed.entries.find((e: { valid: boolean }) => !e.valid);
     expect(broken.signature).toBe('not-checked');
+  });
+
+  const PIN = 'sha256:15d63684b387235c47fe3a81e3004b928f4ea535236a2c1b47465ce5fdd7ce0e';
+
+  it('reports keyTrust no_anchor in JSON without --trust-anchor, and walked with one', () => {
+    const none = JSON.parse(run(`verify ${VECTORS}/valid.json --json`).stdout);
+    expect(none.keyTrust.status).toBe('no_anchor');
+    expect(none.optionalChecks.key_anchoring).toBe('skipped_no_input');
+    const pinned = run(`verify ${VECTORS}/valid.json --trust-anchor ${PIN} --json`);
+    expect(pinned.exitCode).toBe(0);
+    const parsed = JSON.parse(pinned.stdout);
+    expect(parsed.keyTrust).toMatchObject({ status: 'walked', anchoredFromPinned: true, unanchoredKeyIds: [] });
+    expect(parsed.optionalChecks.key_anchoring).toBe('applied');
+  });
+
+  it('fails a key no statement links to the anchor with CHAIN_SIGNING_KEY_UNANCHORED', () => {
+    const result = run(`verify ${VECTORS}/valid.json --trust-anchor sha256:${'ab'.repeat(32)} --json`);
+    expect(result.exitCode).toBe(1);
+    expect(JSON.parse(result.stdout).brokenAt).toMatchObject({ position: 1, code: 'CHAIN_SIGNING_KEY_UNANCHORED' });
+  });
+
+  it('a distrusted pin anchors nothing, and --distrusted-key without --trust-anchor is a usage error', () => {
+    const result = run(`verify ${VECTORS}/valid.json --trust-anchor ${PIN} --distrusted-key ${PIN} --json`);
+    expect(result.exitCode).toBe(1);
+    expect(JSON.parse(result.stdout).brokenAt.code).toBe('CHAIN_SIGNING_KEY_UNANCHORED');
+    const alone = run(`verify ${VECTORS}/valid.json --distrusted-key ${PIN} --json`);
+    expect(alone.exitCode).toBe(2);
+    expect(alone.stdout + alone.stderr).toContain('MISSING_INPUT');
+  });
+
+  it('a malformed --trust-anchor is a usage error naming the flag, not the keys file', () => {
+    const result = run(`verify ${VECTORS}/valid.json --trust-anchor 15d63684 --json`);
+    expect(result.exitCode).toBe(2);
+    const out = result.stdout + result.stderr;
+    expect(out).toContain('INVALID_FIELD');
+    expect(out).toContain('--trust-anchor sha256:<64 hex>');
+    expect(out).not.toContain('--keys file');
   });
 
   it('usage error exit 2 on missing file arg', () => {
@@ -752,7 +789,7 @@ describe('verify command', () => {
   it('human output says how many agent signatures were checked, and PASS speaks for the Server signatures only', () => {
     const none = human(`verify ${LIVE}/export-cert-lifecycle.json`);
     expect(none).toContain('Agent signatures: 6 sealed on the chain, not checked. Pass --agent-keys');
-    expect(none).toContain('every Server signature verified');
+    expect(none).toContain('every Server signature verifies');
     expect(none).not.toContain('every signature verified');
 
     const dir = mkdtempSync(join(tmpdir(), 'agl-agent-keys-'));
@@ -763,6 +800,32 @@ describe('verify command', () => {
 
     const all = human(`verify ${LIVE}/export-cert-lifecycle.json --agent-keys ${LIVE}/agent-cert-key.json`);
     expect(all).toContain('Agent signatures: 6/6 re-verified offline against --agent-keys.');
+  });
+
+  it('human output says PASS only for an anchored chain, and never reads an unanchored one as a clean pass', () => {
+    const none = human(`verify ${VECTORS}/valid.json`);
+    expect(none).toContain('UNANCHORED  Record:');
+    expect(none).not.toContain('PASS');
+    expect(none).toContain('Keys: not anchored. No --trust-anchor was given');
+    expect(none).toContain('against keys nobody pinned');
+    expect(none).not.toContain('linked to your trust anchor');
+
+    const pinned = human(`verify ${VECTORS}/valid.json --trust-anchor ${PIN}`);
+    expect(pinned).toContain('PASS  Record:');
+    expect(pinned).toContain(`Keys: 1 anchored to --trust-anchor ${PIN}.`);
+    expect(pinned).toContain('every Server signature verified under a key linked to your trust anchor');
+
+    // A failing run exits 1, which execSync raises; the rendered report rides on the error.
+    let substituted = '';
+    try {
+      human(`verify ${VECTORS}/key-substitution.json --trust-anchor ${PIN}`);
+    } catch (err) {
+      substituted = String((err as { stdout?: string }).stdout);
+    }
+    expect(substituted).toContain('FAIL  Record:');
+    expect(substituted).toContain('Broken at position 2: CHAIN_SIGNING_KEY_UNANCHORED');
+    expect(substituted).not.toContain('linked to your trust anchor');
+    expect(substituted).not.toContain('Hash chain contiguous');
   });
 
   it('refuses a file that is not an Ed25519 JWK with a usage error', () => {
@@ -791,6 +854,7 @@ describe('verify command: conformance corpus (manifest-export.json)', () => {
     options?: {
       keysFile?: string;
       requireKeyId?: string;
+      /** The manifest's name for --require-supplied-keys (API-owned corpus). */
       requireOutOfBandKeys?: boolean;
       /**
        * A JSON array of agent cert public keys. Unmapped, a vector expecting
@@ -805,25 +869,33 @@ describe('verify command: conformance corpus (manifest-export.json)', () => {
     readFileSync(join(CONFORMANCE, 'manifest-export.json'), 'utf-8'),
   ) as { vectors: ManifestVector[] };
 
+  const flagsFor = (vector: ManifestVector): string => {
+    let flags = vector.options?.keysFile
+      ? ` --keys ${join(CONFORMANCE, vector.options.keysFile)}`
+      : '';
+    if (vector.options?.requireKeyId) flags += ` --require-key-id ${vector.options.requireKeyId}`;
+    if (vector.options?.agentKeysFile) {
+      flags += ` --agent-keys ${join(CONFORMANCE, vector.options.agentKeysFile)}`;
+    }
+    if (vector.options?.requireOutOfBandKeys) flags += ' --require-supplied-keys';
+    return flags;
+  };
+  interface Parsed {
+    valid: boolean;
+    brokenAt?: { code: string; position: number };
+    keyTrust: { status: string };
+  }
+
   for (const vector of manifest.vectors) {
     const label =
       vector.expect === 'pass'
         ? `${vector.file} -> pass`
         : `${vector.file} -> fail (${vector.failureCode})`;
     it(label, () => {
-      let flags = vector.options?.keysFile
-        ? ` --keys ${join(CONFORMANCE, vector.options.keysFile)}`
-        : '';
-      if (vector.options?.requireKeyId) flags += ` --require-key-id ${vector.options.requireKeyId}`;
-      if (vector.options?.agentKeysFile) {
-        flags += ` --agent-keys ${join(CONFORMANCE, vector.options.agentKeysFile)}`;
-      }
-      if (vector.options?.requireOutOfBandKeys) flags += ' --require-out-of-band-keys';
-      const result = run(`verify ${join(CONFORMANCE, vector.file)}${flags} --json`);
-      const parsed = JSON.parse(result.stdout) as {
-        valid: boolean;
-        brokenAt?: { code: string; position: number };
-      };
+      const result = run(`verify ${join(CONFORMANCE, vector.file)}${flagsFor(vector)} --json`);
+      const parsed = JSON.parse(result.stdout) as Parsed;
+      // The manifest pins no anchor, so the JSON must say no key was anchored.
+      expect(parsed.keyTrust.status).toBe('no_anchor');
       if (vector.expect === 'pass') {
         expect(result.exitCode).toBe(0);
         expect(parsed.valid).toBe(true);
@@ -836,6 +908,26 @@ describe('verify command: conformance corpus (manifest-export.json)', () => {
           expect(parsed.brokenAt?.position).toBe(vector.brokenAt);
         }
       }
+    });
+  }
+
+  // Pinned on the key each export names, every verdict holds except the
+  // substituted key, which no signed statement admits.
+  const STRANGER = `sha256:${'ab'.repeat(32)}`;
+  for (const vector of manifest.vectors) {
+    const substituted = vector.expect === 'pass' && vector.file === 'export/key-substitution.json';
+    it(`${vector.file} --trust-anchor -> ${substituted ? 'fail (CHAIN_SIGNING_KEY_UNANCHORED)' : vector.expect}`, () => {
+      const exp = JSON.parse(readFileSync(join(CONFORMANCE, vector.file), 'utf-8')) as {
+        exportMetadata: { anchoredFrom?: string | null };
+      };
+      const anchor = exp.exportMetadata.anchoredFrom ?? STRANGER;
+      const result = run(`verify ${join(CONFORMANCE, vector.file)}${flagsFor(vector)} --trust-anchor ${anchor} --json`);
+      const parsed = JSON.parse(result.stdout) as Parsed;
+      const pass = vector.expect === 'pass' && !substituted;
+      expect(result.exitCode).toBe(pass ? 0 : 1);
+      expect(parsed.valid).toBe(pass);
+      if (substituted) expect(parsed.brokenAt).toMatchObject({ code: 'CHAIN_SIGNING_KEY_UNANCHORED', position: 2 });
+      else if (!pass) expect(parsed.brokenAt?.code).toBe(vector.failureCode);
     });
   }
 });

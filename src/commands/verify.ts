@@ -1,8 +1,10 @@
 import { Args, Flags } from '@oclif/core';
 import {
+  parseDistrustedKeys,
+  parseTrustAnchors,
   verifyAuditExport,
   type AgentPublicKeyJwk,
-  type OutOfBandKeyEntry,
+  type SuppliedKeyEntry,
   type VerifyExportResult,
   type RecordAuditExportInput,
 } from '@agledger/verify-core';
@@ -20,6 +22,7 @@ export default class Verify extends BaseCommand {
     'Verify a record audit export offline (COSE_Sign1 envelope, RFC 9052; Ed25519 or ES256).';
 
   static override examples = [
+    '<%= config.bin %> verify audit-export.json --trust-anchor sha256:<64 hex>',
     '<%= config.bin %> verify audit-export.json',
     '<%= config.bin %> verify audit-export.json --keys vault-keys.json',
     '<%= config.bin %> verify audit-export.json --agent-keys agent-jwks.json',
@@ -39,11 +42,29 @@ export default class Verify extends BaseCommand {
     quiet: BaseCommand.baseFlags.quiet,
     keys: Flags.string({
       description:
-        'Path to a JSON file holding out-of-band public keys. Accepts a ' +
+        'Path to a JSON file holding public keys you supply. Accepts a ' +
         '{keyId: SPKI-DER-base64} map, a [{keyId, publicKey, ...}] list, or the ' +
         'raw GET /v1/verification-keys response envelope ({data:[...], ...}, the ' +
-        '.data array is unwrapped automatically). Merged over any keys embedded ' +
-        'in the export.',
+        '.data array is unwrapped automatically, and each key\'s signed statements ' +
+        'are walked with --trust-anchor). Merged over any keys embedded in the export. ' +
+        'Where a key came from is not whether it is trusted: that is --trust-anchor.',
+    }),
+    'trust-anchor': Flags.string({
+      multiple: true,
+      description:
+        'sha256:<64 hex> SPKI digest of a vault key you took out of band (the installer prints the ' +
+        'first vault key\'s; the Server\'s signing-key-digest.js derives one from any key you hold). ' +
+        'The signed key statements the export carries are walked from it: an entry signed by a key ' +
+        'the walk does not reach fails CHAIN_SIGNING_KEY_UNANCHORED, and a statement that does not ' +
+        'hold fails KEY_STATEMENT_INVALID, KEY_CLOSURE_INVALID or CHAIN_KEY_WINDOW_DRIFT. Without ' +
+        'one, a pass rests on keys nobody pinned. Repeatable.',
+    }),
+    'distrusted-key': Flags.string({
+      multiple: true,
+      description:
+        'sha256:<64 hex>, optionally @<RFC 3339 instant>: a key the operator distrusts, as in the ' +
+        'Server\'s VAULT_DISTRUSTED_KEYS. What it signed from that instant (with none, from its ' +
+        'retirement) counts for nothing in the walk. Requires --trust-anchor. Repeatable.',
     }),
     'agent-keys': Flags.string({
       description:
@@ -58,10 +79,10 @@ export default class Verify extends BaseCommand {
         'Require every entry to reference this keyId. Rejects otherwise-valid exports ' +
         'signed by a retired or unexpected key.',
     }),
-    'require-out-of-band-keys': Flags.boolean({
+    'require-supplied-keys': Flags.boolean({
       description:
-        'High-assurance: refuse keys embedded in the export. Verifying the engine against ' +
-        'its own embedded key is not an independent audit, so supply keys via --keys instead.',
+        'Refuse keys embedded in the export: an entry whose only key is export-embedded fails ' +
+        'CHAIN_KEY_POLICY_VIOLATION, so every signature is checked against a key from --keys.',
       default: false,
     }),
   };
@@ -105,17 +126,47 @@ export default class Verify extends BaseCommand {
         )
       : undefined;
 
-    // verify-core throws TypeError at the OOB-key boundary when the file's
-    // shape is wrong (e.g. {keyId: 42}, [null], "..."). Catch it so the CLI
-    // emits its structured-error envelope rather than oclif's raw exception
-    // trace; agents parsing stderr need {code, message, suggestion}, not a
-    // stack frame. See verify-core/audit-export.ts normalizeOutOfBandKeys.
+    const trustAnchors = flags['trust-anchor'] ?? [];
+    const distrustedKeys = flags['distrusted-key'] ?? [];
+    // Parsed here as well as in verify-core so a malformed digest is reported
+    // against the flag that carried it, not as a keys-file problem.
+    try {
+      parseTrustAnchors(trustAnchors);
+      parseDistrustedKeys(distrustedKeys);
+    } catch (err) {
+      if (err instanceof TypeError) {
+        this.failWith(
+          ErrorCode.INVALID_FIELD,
+          err.message,
+          ExitCode.USAGE_ERROR,
+          'Pass --trust-anchor sha256:<64 hex> and --distrusted-key sha256:<64 hex>[@<RFC 3339 instant>], once per key.',
+        );
+      }
+      throw err;
+    }
+    // verify-core reads distrusted keys only during the walk, so without an
+    // anchor they would be dropped without a word.
+    if (distrustedKeys.length > 0 && trustAnchors.length === 0) {
+      this.failWith(
+        ErrorCode.MISSING_INPUT,
+        '--distrusted-key is read only during the key-statement walk, which needs --trust-anchor.',
+        ExitCode.USAGE_ERROR,
+        'Pass --trust-anchor sha256:<64 hex> with the digest of a vault key you took out of band.',
+      );
+    }
+
+    // verify-core throws TypeError at the supplied-key boundary when the
+    // file's shape is wrong (e.g. {keyId: 42}, [null], "..."). Catch it so the
+    // CLI emits its structured-error envelope rather than oclif's raw
+    // exception trace; agents parsing stderr need {code, message, suggestion},
+    // not a stack frame.
     let result: VerifyExportResult;
     try {
       result = verifyAuditExport(exportData, {
         publicKeys,
         requireKeyId: flags['require-key-id'],
-        requireOutOfBandKeys: flags['require-out-of-band-keys'],
+        requireSuppliedKeys: flags['require-supplied-keys'],
+        ...(trustAnchors.length > 0 ? { trustAnchors, distrustedKeys } : {}),
         agentKeys,
       });
     } catch (err) {
@@ -149,16 +200,16 @@ export default class Verify extends BaseCommand {
    * `[{keyId, publicKey}]` list or a `{keyId: base64}` map passes through
    * untouched; verify-core then validates the shape and throws on anything else.
    */
-  private unwrapKeys(raw: unknown): Record<string, string> | ReadonlyArray<OutOfBandKeyEntry> {
+  private unwrapKeys(raw: unknown): Record<string, string> | ReadonlyArray<SuppliedKeyEntry> {
     if (
       raw &&
       typeof raw === 'object' &&
       !Array.isArray(raw) &&
       Array.isArray((raw as { data?: unknown }).data)
     ) {
-      return (raw as { data: ReadonlyArray<OutOfBandKeyEntry> }).data;
+      return (raw as { data: ReadonlyArray<SuppliedKeyEntry> }).data;
     }
-    return raw as Record<string, string> | ReadonlyArray<OutOfBandKeyEntry>;
+    return raw as Record<string, string> | ReadonlyArray<SuppliedKeyEntry>;
   }
 
   /**
@@ -183,11 +234,37 @@ export default class Verify extends BaseCommand {
     if (this.isQuiet) return;
 
     const out = process.stdout;
-    const icon = result.valid ? 'PASS' : 'FAIL';
+    const trust = result.keyTrust;
+    // PASS only when the keys were walked from an anchor the caller pinned. A
+    // chain that verifies against keys nobody pinned is not a clean result,
+    // whatever `valid` says, so it gets its own verdict word.
+    const anchored = trust.status === 'walked';
+    const icon = !result.valid ? 'FAIL' : anchored ? 'PASS' : 'UNANCHORED';
     out.write(`${icon}  Record: ${result.recordId}\n`);
     out.write(
       `       Entries: ${result.verifiedEntries}/${result.totalEntries} verified\n`,
     );
+
+    if (anchored) {
+      out.write(
+        `       Keys: ${trust.anchoredKeyIds.length} anchored to --trust-anchor ${trust.anchors.join(', ')}` +
+          (trust.unanchoredKeyIds.length > 0 ? `; not anchored: ${trust.unanchoredKeyIds.join(', ')}` : '') +
+          (trust.undecidedKeyIds.length > 0 ? `; undecided on this host: ${trust.undecidedKeyIds.join(', ')}` : '') +
+          '.\n',
+      );
+    } else {
+      out.write(
+        '       Keys: not anchored. No --trust-anchor was given, so the signatures were checked against keys ' +
+          "nobody pinned, and a key written into the Server's database alone would pass. Pass " +
+          '--trust-anchor sha256:<hex> with the digest of a vault key you took out of band.\n',
+      );
+      if (trust.anchoredFrom) {
+        out.write(`       The export names its Server's key as ${trust.anchoredFrom}: its own claim, not an anchor.\n`);
+      }
+    }
+    for (const f of trust.findings) {
+      out.write(`       Key finding: ${f.code}${f.keyId ? ` (${f.keyId})` : ''}: ${f.detail}\n`);
+    }
 
     // Agent signatures are checked only against keys the caller supplies, so
     // the lines below say exactly how many were, and the PASS line speaks for
@@ -207,7 +284,11 @@ export default class Verify extends BaseCommand {
     }
 
     if (result.valid) {
-      out.write('       Hash chain contiguous, every Server signature verified.\n');
+      out.write(
+        anchored
+          ? '       Hash chain contiguous, every Server signature verified under a key linked to your trust anchor.\n'
+          : '       Hash chain contiguous and every Server signature verifies, against keys nobody pinned.\n',
+      );
       return;
     }
 
