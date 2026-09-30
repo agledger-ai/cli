@@ -283,6 +283,13 @@ export default class Verify extends BaseCommand {
       );
     }
 
+    const { skipped } = result.signatureCoverage;
+    if (result.valid && skipped > 0) {
+      out.write(
+        `       Unsigned: ${skipped} of ${result.totalEntries} entries carry no signature (written before the install registered its first key), so they are covered by the hash chain only.\n`,
+      );
+    }
+
     if (result.valid) {
       out.write(
         anchored
