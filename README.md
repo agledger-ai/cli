@@ -96,6 +96,44 @@ Reach for `-f` rather than quoting. Shell quotes that survive into the value
 characters inside it, and the Server accepts that: the Record is notarized,
 signed and immutable, with an identifier no other system will match.
 
+## Verifying an export offline
+
+`agledger verify` checks a Record's audit export with no network and no API
+key: the hash chain, every COSE_Sign1 envelope signature (Ed25519 or ES256),
+and the bindings between the signed bytes and the columns beside them.
+
+```bash
+# Save a Record's audit export
+agledger api GET /v1/records/<record-id>/audit-export > audit-export.json
+
+# Verify it against a vault key you pinned
+agledger verify audit-export.json --trust-anchor sha256:<digest>
+```
+
+The keys an export embeds, and the ones `GET /v1/verification-keys` serves,
+come from the Server's database, so a key written into the database alone
+would verify against them. `--trust-anchor` takes the SPKI digest of a vault
+key you took out of band (the installer prints the first vault key's) and walks
+the signed key statements the export carries from it:
+
+- `PASS` means the chain verifies and every key is linked to your anchor.
+- `UNANCHORED` means the chain verifies but no `--trust-anchor` was given, so
+  nothing links the keys to one you trust. It exits 0; in `--json` output,
+  `keyTrust.status` is `no_anchor`. Treat it as unverified provenance, not as
+  a clean pass.
+- `FAIL` exits 1. An entry signed by a key the walk does not reach is
+  `CHAIN_SIGNING_KEY_UNANCHORED`; a key statement that does not hold is
+  `KEY_STATEMENT_INVALID`, `KEY_CLOSURE_INVALID` or `CHAIN_KEY_WINDOW_DRIFT`,
+  reported at position 0.
+
+`--distrusted-key sha256:<digest>[@<RFC 3339 instant>]` mirrors the operator's
+`VAULT_DISTRUSTED_KEYS` and needs `--trust-anchor`. `--keys <file>` supplies
+keys (a saved `GET /v1/verification-keys` response works as is, and its
+statements are walked too), `--require-supplied-keys` refuses the export's
+embedded keys, and `--agent-keys <file>` re-verifies the agent signatures an
+OIDC cert sealed on the chain. `--trust-anchor` and `--distrusted-key` are
+repeatable. A malformed value is a usage error (exit 2).
+
 ## Agent-native DX
 
 - `--json` on every command (auto when stdout is piped)
@@ -127,7 +165,7 @@ agledger api GET /openapi.json          # Full API route catalog
 | `logout` | Remove profile(s) |
 | `auth` | Check current login state and show the identity, including the OIDC cert (exit 0 when nothing is configured) |
 | `config` | `list` / `get` / `use <profile>` / `path` |
-| `verify` | Offline audit export verification (COSE_Sign1, RFC 9052; Ed25519 or ES256; no network). `--agent-keys <file>` re-verifies the agent signatures sealed on the chain against the cert keys you supply |
+| `verify` | Offline audit export verification (COSE_Sign1, RFC 9052; Ed25519 or ES256; no network). `--trust-anchor sha256:<digest>` anchors the keys to one you pinned; see [Verifying an export offline](#verifying-an-export-offline) |
 | `docs` | Fetch the API's agent-oriented narrative (`llms.txt` / `--full`) |
 | `list-commands` | Inventory (this list) |
 | `help-json` | Per-command schema |
