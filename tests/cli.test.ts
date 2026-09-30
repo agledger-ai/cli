@@ -828,6 +828,11 @@ describe('verify command', () => {
     expect(substituted).not.toContain('Hash chain contiguous');
   });
 
+  it('human output names unsigned entries as covered by the hash chain only', () => {
+    const out = human(`verify ${VECTORS}/unsigned.json --keys ${VECTORS}/keys-oob.json`);
+    expect(out).toContain('Unsigned: 3 of 3 entries carry no signature');
+  });
+
   it('refuses a file that is not an Ed25519 JWK with a usage error', () => {
     const dir = mkdtempSync(join(tmpdir(), 'agl-agent-keys-'));
     writeFileSync(join(dir, 'bad.json'), JSON.stringify({ kty: 'OKP', crv: 'Ed25519' }));
