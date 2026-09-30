@@ -4,7 +4,9 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.6.0] - 2026-09-28
+## [2.0.0] - 2026-09-30
+
+Targets API 2.0 only. The major version follows the API's.
 
 ### Added
 
@@ -12,8 +14,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- **Error bodies are read through `detail`.** API 2.0 removed the top-level `message` from every RFC 9457 error body; `detail` is the one human-readable field. `classify401` (which credential a 401 is about) and the OIDC exchange error now read `detail` only, where they used to fall back to `message` (cli#27). API errors still pass through to stderr verbatim. The CLI's own errors (`{error, code, message, suggestion}`) keep their `message`, since those are not API bodies.
 - **`AGLEDGER_OIDC_AGENT_ID` and `login --oidc-agent-id` are documented as an assertion, not a choice of agent.** The Server binds a cert to the agent the token names (a mapped `agent_id` claim, else the agent carrying the token's `oidcIss`/`oidcSub`, else an auto-provisioned one), and never to one the request body chooses. When the id names a different agent, or the token binds none, the exchange is refused with 403 `CERT_AGENT_BINDING_MISMATCH`; a token bound to a federation shadow agent is refused with 403 `SHADOW_AGENT_CERT_FORBIDDEN`. The flag's help, the README and `SKILL.md` now say so, and point at binding the agent instead: `PATCH /v1/agents/{id}` with `oidcIss` and `oidcSub`, or `claimMapping.agent_id` on the trusted issuer. The CLI still sends the id when it is set, and the refusal still fails with `OIDC_EXCHANGE_FAILED` (exit 4 on a 403) carrying the Server's error body and its `recoveryHint` under `apiError`.
-- **Conformance corpus regenerated** from agledger-api `cea0f7d5`: the same 32 export vectors with the same expected outcomes and failure codes.
+- **Conformance corpus regenerated** from the 2.0 engine (`apiGitSha e690979c`, `apiVersion 2.0.0`): 32 export vectors, every earlier vector with the same expected outcome and failure code, and three new ones covering unsigned entries (two expect `CHAIN_ENTRY_UNSIGNED`, one a clean pass).
 
 ## [1.5.0] - 2026-09-21
 

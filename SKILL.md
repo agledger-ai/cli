@@ -55,7 +55,7 @@ agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value | -f key
 - `--quiet` for exit-code-only operation
 - `--dry-run` on `agledger api` shows the request without sending
 - `--paginate` on GET follows cursors, streams NDJSON
-- Structured errors on stderr: `{code, message, suggestion, ...}`
+- Structured errors on stderr: the CLI's own are `{code, message, suggestion, ...}`; an API error is the Server's RFC 9457 body, verbatim, with its text in `detail`
 - Semantic exit codes (0-10)
 
 ## Credentials
