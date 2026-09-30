@@ -222,11 +222,11 @@ describe('cert lifetime', () => {
   });
 
   it('a second 401 surfaces as the response, with no further exchange', async () => {
-    const h = harness(() => json(401, { error: 'UNAUTHORIZED', message: 'cert revoked' }));
+    const h = harness(() => json(401, { error: 'UNAUTHORIZED', detail: 'cert revoked' }));
     const client = new ApiClient('https://api.test', new OidcCertCredential({ source: commandSource() }));
     const res = await client.request('GET', '/v1/records');
     expect(res.status).toBe(401);
-    expect(res.body).toEqual({ error: 'UNAUTHORIZED', message: 'cert revoked' });
+    expect(res.body).toEqual({ error: 'UNAUTHORIZED', detail: 'cert revoked' });
     expect(h.exchanges).toHaveLength(2);
     expect(h.apiCalls).toHaveLength(2);
   });
@@ -378,7 +378,7 @@ describe('which 401s renew what', () => {
     const h = harness(() =>
       json(401, {
         error: 'UNAUTHORIZED',
-        message: 'X-Agent-Signature does not verify against the ephemeral cert public key over the request body hash',
+        detail: 'X-Agent-Signature does not verify against the ephemeral cert public key over the request body hash',
       }),
     );
     const client = new ApiClient('https://api.test', new OidcCertCredential({ source: commandSource() }));
@@ -398,7 +398,7 @@ describe('which 401s renew what', () => {
       if (obo === delegations[0]) {
         // Rotate the file the way whatever writes it would.
         writeFileSync(path, delegations[1]!);
-        return json(401, { message: 'AGLedger-On-Behalf-Of: token expired. Configure a trusted issuer.' });
+        return json(401, { detail: 'AGLedger-On-Behalf-Of: token expired. Configure a trusted issuer.' });
       }
       return json(201, {});
     });

@@ -370,8 +370,7 @@ export class OidcCertCredential {
 
     if (!res.ok) {
       const clean = scrub(parsed, token) as Record<string, unknown>;
-      const detail =
-        typeof clean.detail === 'string' ? clean.detail : typeof clean.message === 'string' ? clean.message : '';
+      const detail = typeof clean.detail === 'string' ? clean.detail : '';
       // The Server exchanges a token id once. A token file returns the same
       // token until whatever writes it rotates it, so every CLI run after the
       // first lands here until then.

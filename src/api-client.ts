@@ -52,7 +52,7 @@ function appendQueryParam(search: URLSearchParams, key: string, value: unknown):
  */
 export function classify401(body: unknown): 'delegation' | 'agent-signature' | 'bearer' {
   const b = (body ?? {}) as Record<string, unknown>;
-  const text = [b.message, b.detail].filter((v): v is string => typeof v === 'string').join(' ');
+  const text = typeof b.detail === 'string' ? b.detail : '';
   if (/x-agent-signature/i.test(text)) return 'agent-signature';
   if (/on-behalf-of|delegation/i.test(text)) return 'delegation';
   return 'bearer';
