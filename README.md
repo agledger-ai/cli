@@ -116,15 +116,21 @@ would verify against them. `--trust-anchor` takes the SPKI digest of a vault
 key you took out of band (the installer prints the first vault key's) and walks
 the signed key statements the export carries from it:
 
-- `PASS` means the chain verifies and every key is linked to your anchor.
-- `VERIFIED, NOT ANCHORED` means the chain verifies but no `--trust-anchor` was given, so
-  nothing links the keys to one you trust. It exits 0; in `--json` output,
-  `keyTrust.status` is `no_anchor`. Treat it as unverified provenance, not as
-  a clean pass.
+- `PASS` means the chain verifies, every key is linked to your anchor, and at
+  least one signature verified under an anchored key.
+- `VERIFIED, NOT ANCHORED` means nothing failed, but it is not a trusted
+  verdict. Either no `--trust-anchor` was given, so nothing links the keys to
+  one you trust (`keyTrust.status` is `no_anchor`), or the anchor was walked
+  but no signature verified under a key it anchors, as for an export of
+  unsigned history (`no_anchored_signature`). It exits 0, and `--json` output
+  carries `verdict: "unanchored"` for both. Treat it as unverified
+  provenance, not as a clean pass.
 - `FAIL` exits 1. An entry signed by a key the walk does not reach is
   `CHAIN_SIGNING_KEY_UNANCHORED`; a key statement that does not hold is
-  `KEY_STATEMENT_INVALID`, `KEY_CLOSURE_INVALID` or `CHAIN_KEY_WINDOW_DRIFT`,
-  reported at position 0.
+  `KEY_STATEMENT_INVALID`, `KEY_CLOSURE_INVALID` or `CHAIN_KEY_WINDOW_DRIFT`.
+  Those are listed under `keyTrust.findings`, and are `brokenAt` at position 0
+  only when the chain itself is intact; when the chain also breaks, `brokenAt`
+  is the chain failure.
 
 `--distrusted-key sha256:<digest>[@<RFC 3339 instant>]` mirrors the operator's
 `VAULT_DISTRUSTED_KEYS` and needs `--trust-anchor`. `--keys <file>` supplies

@@ -31,10 +31,15 @@ export default class Verify extends BaseCommand {
     'cat audit-export.json | <%= config.bin %> verify -',
   ];
 
+  // FILE is required, but checked in run() rather than by oclif: oclif's own
+  // missing-arg error tells the caller to put arguments before every
+  // repeatable flag, which is not true of non-greedy ones, and lists hidden
+  // flags with them.
+  static override usage = 'verify FILE [--trust-anchor <value>...] [--distrusted-key <value>...] [--keys <value>] [--agent-keys <value>] [--require-key-id <value>] [--require-supplied-keys] [--json] [--quiet]';
+
   static override args = {
     file: Args.string({
       description: 'Path to the audit export JSON file (or "-" for stdin).',
-      required: true,
     }),
   };
 
@@ -52,6 +57,7 @@ export default class Verify extends BaseCommand {
     }),
     'trust-anchor': Flags.string({
       multiple: true,
+      multipleNonGreedy: true,
       description:
         'sha256:<64 hex> SPKI digest of a vault key you took out of band (the installer prints the ' +
         'first vault key\'s; the Server\'s signing-key-digest.js derives one from any key you hold). ' +
@@ -62,6 +68,7 @@ export default class Verify extends BaseCommand {
     }),
     'distrusted-key': Flags.string({
       multiple: true,
+      multipleNonGreedy: true,
       description:
         'sha256:<64 hex>, optionally @<RFC 3339 instant>: a key the operator distrusts, as in the ' +
         'Server\'s VAULT_DISTRUSTED_KEYS. What it signed from that instant (with none, from its ' +
@@ -82,7 +89,7 @@ export default class Verify extends BaseCommand {
     }),
     // Refused by name, as @agledger/verify and the Python agledger-verify
     // refuse them, rather than as an unknown flag.
-    'distrusted-keys': Flags.string({ hidden: true, multiple: true }),
+    'distrusted-keys': Flags.string({ hidden: true }),
     'require-out-of-band-keys': Flags.boolean({ hidden: true, default: false }),
     'require-supplied-keys': Flags.boolean({
       description:
@@ -140,6 +147,14 @@ export default class Verify extends BaseCommand {
         '--distrusted-key acts only inside the key-statement walk, which runs from --trust-anchor; pass the pin as well.',
         ExitCode.USAGE_ERROR,
         'Pass --trust-anchor sha256:<64 hex> with the digest of a vault key you took out of band.',
+      );
+    }
+    if (args.file === undefined) {
+      this.failWith(
+        ErrorCode.MISSING_INPUT,
+        'Missing the audit export to verify.',
+        ExitCode.USAGE_ERROR,
+        'Pass the path to an audit-export JSON file, or `-` to read it from stdin, before or after the flags.',
       );
     }
     if (args.file !== '-' && !existsSync(args.file)) {
@@ -219,8 +234,7 @@ export default class Verify extends BaseCommand {
     if (this.isJson) {
       // verify-core's result verbatim, plus the verdict @agledger/verify
       // reports: `valid` alone is true on a run that anchored nothing.
-      const verdict = !result.valid ? 'failed' : result.keyTrust.status === 'no_anchor' ? 'unanchored' : 'trusted';
-      this.output({ verdict, ...result });
+      this.output({ verdict: verdictOf(result), ...result });
     } else {
       this.renderHuman(result, agentKeys !== undefined);
     }
@@ -271,17 +285,32 @@ export default class Verify extends BaseCommand {
 
     const out = process.stdout;
     const trust = result.keyTrust;
-    // PASS only when the keys were walked from an anchor the caller pinned. A
-    // chain that verifies against keys nobody pinned is not a clean result,
-    // whatever `valid` says, so it gets its own verdict word.
+    // PASS only when the walk from a pinned anchor verified at least one
+    // signature. A chain that verifies against keys nobody pinned, or whose
+    // anchors verified no signature at all, is not a clean result whatever
+    // `valid` says, so it gets its own verdict word.
+    const verdict = verdictOf(result);
     const anchored = trust.status === 'walked';
     // The same headline words as @agledger/verify and the Python agledger-verify.
-    const icon = !result.valid ? 'FAIL' : anchored ? 'PASS' : 'VERIFIED, NOT ANCHORED';
+    const icon = verdict === 'failed' ? 'FAIL' : verdict === 'trusted' ? 'PASS' : 'VERIFIED, NOT ANCHORED';
     out.write(`${icon}  Record: ${result.recordId}\n`);
     out.write(
       `       Entries: ${result.verifiedEntries}/${result.totalEntries} verified\n`,
     );
 
+    if (verdict === 'unanchored') {
+      out.write(
+        trust.status === 'no_anchored_signature'
+          ? '       Nothing failed, but this is NOT a trusted verdict: the --trust-anchor was walked, but no ' +
+              'signature here verified under a key it anchors. An entry written before the install began ' +
+              'signing carries no signature, and proves nothing about who wrote it.\n'
+          : '       Nothing failed, but this is NOT a trusted verdict: no --trust-anchor was given, so every ' +
+              "signing key was taken on the word of the export itself, and a key written into the Server's " +
+              'database alone would verify. Ask the operator for the SPKI digest of a vault key (the ' +
+              'installer prints it; signing-key-digest.js derives it from any key) and re-run with ' +
+              '--trust-anchor sha256:<hex>.\n',
+      );
+    }
     if (anchored) {
       out.write(
         `       Keys: ${trust.anchoredKeyIds.length} anchored to --trust-anchor ${trust.anchors.join(', ')}` +
@@ -289,12 +318,12 @@ export default class Verify extends BaseCommand {
           (trust.undecidedKeyIds.length > 0 ? `; undecided on this host: ${trust.undecidedKeyIds.join(', ')}` : '') +
           '.\n',
       );
-    } else {
+    } else if (trust.status === 'no_anchored_signature') {
       out.write(
-        '       Keys: not anchored. No --trust-anchor was given, so the signatures were checked against keys ' +
-          "nobody pinned, and a key written into the Server's database alone would pass. Pass " +
-          '--trust-anchor sha256:<hex> with the digest of a vault key you took out of band.\n',
+        `       Keys: walked from --trust-anchor ${trust.anchors.join(', ')}; no signature verified under an anchored key.\n`,
       );
+    } else {
+      out.write('       Keys: not anchored (no --trust-anchor given), checked against keys nobody pinned.\n');
       if (trust.anchoredFrom) {
         out.write(`       The export names its Server's key as ${trust.anchoredFrom}: its own claim, not an anchor.\n`);
       }
@@ -329,9 +358,11 @@ export default class Verify extends BaseCommand {
 
     if (result.valid) {
       out.write(
-        anchored
+        verdict === 'trusted'
           ? '       Hash chain contiguous, every Server signature verified under a key linked to your trust anchor.\n'
-          : '       Hash chain contiguous and every Server signature verifies, against keys nobody pinned.\n',
+          : trust.status === 'no_anchored_signature'
+            ? '       Hash chain contiguous, but no Server signature verified under a key your trust anchor reaches.\n'
+            : '       Hash chain contiguous and every Server signature verifies, against keys nobody pinned.\n',
       );
       return;
     }
@@ -348,4 +379,14 @@ export default class Verify extends BaseCommand {
       out.write(`       ${failures.length} entries failed verification.\n`);
     }
   }
+}
+
+/**
+ * The verdict @agledger/verify reports. Trusted only when the walk ran and
+ * verified a signature under an anchored key: `no_anchor` and
+ * `no_anchored_signature` are both unanchored, whatever `valid` says.
+ */
+function verdictOf(result: VerifyExportResult): 'trusted' | 'unanchored' | 'failed' {
+  if (!result.valid) return 'failed';
+  return result.keyTrust.status === 'walked' ? 'trusted' : 'unanchored';
 }

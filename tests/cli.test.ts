@@ -832,8 +832,8 @@ describe('verify command', () => {
     const none = human(`verify ${VECTORS}/valid.json`);
     expect(none).toContain('VERIFIED, NOT ANCHORED  Record:');
     expect(none).not.toContain('PASS');
-    expect(none).toContain('Keys: not anchored. No --trust-anchor was given');
-    expect(none).toContain('against keys nobody pinned');
+    expect(none).toContain('Nothing failed, but this is NOT a trusted verdict: no --trust-anchor was given');
+    expect(none).toContain('Keys: not anchored (no --trust-anchor given), checked against keys nobody pinned.');
     expect(none).not.toContain('linked to your trust anchor');
 
     const pinned = human(`verify ${VECTORS}/valid.json --trust-anchor ${PIN}`);
@@ -876,6 +876,34 @@ describe('verify command', () => {
       expect(json.exitCode).toBe(code);
       expect(JSON.parse(json.stdout).verdict).toBe(verdicts[i]);
     });
+  });
+
+  it('a pinned run that verified no signature under an anchored key is unanchored, not trusted', () => {
+    const unsigned = `${VECTORS}/unsigned.json --keys ${VECTORS}/keys-oob.json --trust-anchor ${PIN}`;
+    const json = run(`verify ${unsigned} --json`);
+    expect(json.exitCode).toBe(0);
+    const parsed = JSON.parse(json.stdout);
+    expect(parsed.keyTrust.status).toBe('no_anchored_signature');
+    expect(parsed.verdict).toBe('unanchored');
+
+    const out = human(`verify ${unsigned}`);
+    expect(out.startsWith('VERIFIED, NOT ANCHORED  Record:')).toBe(true);
+    expect(out).not.toContain('PASS');
+    expect(out).toContain('Nothing failed, but this is NOT a trusted verdict: the --trust-anchor was walked, but no signature here verified under a key it anchors.');
+    expect(out).toContain(`Keys: walked from --trust-anchor ${PIN}; no signature verified under an anchored key.`);
+    expect(out).not.toContain('linked to your trust anchor.');
+  });
+
+  it('takes FILE after a repeatable flag, and refuses a missing FILE without advertising retired flags', () => {
+    const after = run(`verify --trust-anchor ${PIN} --distrusted-key sha256:${'cd'.repeat(32)} ${VECTORS}/valid.json --json`);
+    expect(after.exitCode).toBe(0);
+    expect(JSON.parse(after.stdout).keyTrust.status).toBe('walked');
+
+    const missing = run(`verify --trust-anchor ${PIN} --json`);
+    expect(missing.exitCode).toBe(2);
+    expect(JSON.parse(missing.stdout || missing.stderr).code).toBe('MISSING_INPUT');
+    expect(missing.stdout + missing.stderr).not.toContain('--distrusted-keys');
+    expect(run('verify --help').stdout).not.toContain('--distrusted-keys');
   });
 
   it('human output names unsigned entries as covered by the hash chain only', () => {
@@ -981,6 +1009,14 @@ describe('verify command: conformance corpus (manifest-export.json)', () => {
       const pass = vector.expect === 'pass' && !substituted;
       expect(result.exitCode).toBe(pass ? 0 : 1);
       expect(parsed.valid).toBe(pass);
+      // Trusted only when a signature verified under an anchored key: a pass
+      // over unsigned entries alone is unanchored however the walk went.
+      if (pass) {
+        expect((parsed as Parsed & { verdict: string }).verdict).toBe(
+          parsed.keyTrust.status === 'walked' ? 'trusted' : 'unanchored',
+        );
+        if (vector.file === 'export/unsigned.json') expect(parsed.keyTrust.status).toBe('no_anchored_signature');
+      }
       if (substituted) expect(parsed.brokenAt).toMatchObject({ code: 'CHAIN_SIGNING_KEY_UNANCHORED', position: 2 });
       else if (!pass) expect(parsed.brokenAt?.code).toBe(vector.failureCode);
     });
