@@ -813,6 +813,19 @@
           "multiple": false,
           "type": "option"
         },
+        "distrusted-keys": {
+          "hidden": true,
+          "name": "distrusted-keys",
+          "hasDynamicHelp": false,
+          "multiple": true,
+          "type": "option"
+        },
+        "require-out-of-band-keys": {
+          "hidden": true,
+          "name": "require-out-of-band-keys",
+          "allowNo": false,
+          "type": "boolean"
+        },
         "require-supplied-keys": {
           "description": "Refuse keys embedded in the export: an entry whose only key is export-embedded fails CHAIN_KEY_POLICY_VIOLATION, so every signature is checked against a key from --keys.",
           "name": "require-supplied-keys",

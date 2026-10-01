@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { Args, Flags } from '@oclif/core';
 import {
   parseDistrustedKeys,
@@ -79,6 +80,10 @@ export default class Verify extends BaseCommand {
         'Require every entry to reference this keyId. Rejects otherwise-valid exports ' +
         'signed by a retired or unexpected key.',
     }),
+    // Refused by name, as @agledger/verify and the Python agledger-verify
+    // refuse them, rather than as an unknown flag.
+    'distrusted-keys': Flags.string({ hidden: true, multiple: true }),
+    'require-out-of-band-keys': Flags.boolean({ hidden: true, default: false }),
     'require-supplied-keys': Flags.boolean({
       description:
         'Refuse keys embedded in the export: an entry whose only key is export-embedded fails ' +
@@ -89,6 +94,73 @@ export default class Verify extends BaseCommand {
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(Verify);
+
+    if (flags['distrusted-keys'] !== undefined) {
+      this.failWith(
+        ErrorCode.INVALID_FIELD,
+        '--distrusted-keys is now --distrusted-key, given once per key: --distrusted-key sha256:<hex>[@<RFC 3339 instant>].',
+        ExitCode.USAGE_ERROR,
+      );
+    }
+    if (flags['require-out-of-band-keys']) {
+      this.failWith(
+        ErrorCode.INVALID_FIELD,
+        '--require-out-of-band-keys is now --require-supplied-keys: a key fetched from the Server is supplied, not independent of it. Pin --trust-anchor for that.',
+        ExitCode.USAGE_ERROR,
+      );
+    }
+
+    // Checked in the order @agledger/verify and the Python agledger-verify
+    // check them, with the same messages and exit code, and before the export
+    // is read: a mistyped pin is a usage error, never a verdict.
+    const trustAnchors = flags['trust-anchor'] ?? [];
+    const distrustedKeys = flags['distrusted-key'] ?? [];
+    try {
+      parseTrustAnchors(trustAnchors);
+      parseDistrustedKeys(distrustedKeys);
+    } catch (err) {
+      if (err instanceof TypeError) {
+        this.failWith(
+          ErrorCode.INVALID_FIELD,
+          err.message
+            .replace(/^trustAnchors entry /, '--trust-anchor ')
+            .replace(/^distrustedKeys entry /, '--distrusted-key ')
+            .replace(/^distrustedKeys names /, '--distrusted-key names '),
+          ExitCode.USAGE_ERROR,
+          'Pass --trust-anchor sha256:<64 hex> and --distrusted-key sha256:<64 hex>[@<RFC 3339 instant>], once per key.',
+        );
+      }
+      throw err;
+    }
+    // verify-core reads distrusted keys only during the walk, so without an
+    // anchor they would be dropped without a word.
+    if (distrustedKeys.length > 0 && trustAnchors.length === 0) {
+      this.failWith(
+        ErrorCode.MISSING_INPUT,
+        '--distrusted-key acts only inside the key-statement walk, which runs from --trust-anchor; pass the pin as well.',
+        ExitCode.USAGE_ERROR,
+        'Pass --trust-anchor sha256:<64 hex> with the digest of a vault key you took out of band.',
+      );
+    }
+    if (args.file !== '-' && !existsSync(args.file)) {
+      this.failWith(
+        ErrorCode.FILE_READ_ERROR,
+        `Cannot read ${args.file}: no such file or directory.`,
+        ExitCode.USAGE_ERROR,
+        'Pass the path to an audit-export JSON file, or `-` to read it from stdin. ' +
+          'Obtain one with `agledger api GET /v1/records/{id}/audit-export`.',
+      );
+    }
+
+    const agentKeys = flags['agent-keys']
+      ? this.unwrapAgentKeys(
+          this.readJsonSource(
+            flags['agent-keys'],
+            'agent keys',
+            'The --agent-keys file must be an Ed25519 JWK, a list of them, or a {keys:[...]} JWK Set.',
+          ),
+        )
+      : undefined;
 
     const exportData = this.readJsonSource(
       args.file,
@@ -115,45 +187,6 @@ export default class Verify extends BaseCommand {
           ),
         )
       : undefined;
-
-    const agentKeys = flags['agent-keys']
-      ? this.unwrapAgentKeys(
-          this.readJsonSource(
-            flags['agent-keys'],
-            'agent keys',
-            'The --agent-keys file must be an Ed25519 JWK, a list of them, or a {keys:[...]} JWK Set.',
-          ),
-        )
-      : undefined;
-
-    const trustAnchors = flags['trust-anchor'] ?? [];
-    const distrustedKeys = flags['distrusted-key'] ?? [];
-    // Parsed here as well as in verify-core so a malformed digest is reported
-    // against the flag that carried it, not as a keys-file problem.
-    try {
-      parseTrustAnchors(trustAnchors);
-      parseDistrustedKeys(distrustedKeys);
-    } catch (err) {
-      if (err instanceof TypeError) {
-        this.failWith(
-          ErrorCode.INVALID_FIELD,
-          err.message,
-          ExitCode.USAGE_ERROR,
-          'Pass --trust-anchor sha256:<64 hex> and --distrusted-key sha256:<64 hex>[@<RFC 3339 instant>], once per key.',
-        );
-      }
-      throw err;
-    }
-    // verify-core reads distrusted keys only during the walk, so without an
-    // anchor they would be dropped without a word.
-    if (distrustedKeys.length > 0 && trustAnchors.length === 0) {
-      this.failWith(
-        ErrorCode.MISSING_INPUT,
-        '--distrusted-key is read only during the key-statement walk, which needs --trust-anchor.',
-        ExitCode.USAGE_ERROR,
-        'Pass --trust-anchor sha256:<64 hex> with the digest of a vault key you took out of band.',
-      );
-    }
 
     // verify-core throws TypeError at the supplied-key boundary when the
     // file's shape is wrong (e.g. {keyId: 42}, [null], "..."). Catch it so the
@@ -184,7 +217,10 @@ export default class Verify extends BaseCommand {
     }
 
     if (this.isJson) {
-      this.output(result);
+      // verify-core's result verbatim, plus the verdict @agledger/verify
+      // reports: `valid` alone is true on a run that anchored nothing.
+      const verdict = !result.valid ? 'failed' : result.keyTrust.status === 'no_anchor' ? 'unanchored' : 'trusted';
+      this.output({ verdict, ...result });
     } else {
       this.renderHuman(result, agentKeys !== undefined);
     }
@@ -239,7 +275,8 @@ export default class Verify extends BaseCommand {
     // chain that verifies against keys nobody pinned is not a clean result,
     // whatever `valid` says, so it gets its own verdict word.
     const anchored = trust.status === 'walked';
-    const icon = !result.valid ? 'FAIL' : anchored ? 'PASS' : 'UNANCHORED';
+    // The same headline words as @agledger/verify and the Python agledger-verify.
+    const icon = !result.valid ? 'FAIL' : anchored ? 'PASS' : 'VERIFIED, NOT ANCHORED';
     out.write(`${icon}  Record: ${result.recordId}\n`);
     out.write(
       `       Entries: ${result.verifiedEntries}/${result.totalEntries} verified\n`,

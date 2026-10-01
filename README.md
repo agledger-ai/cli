@@ -117,7 +117,7 @@ key you took out of band (the installer prints the first vault key's) and walks
 the signed key statements the export carries from it:
 
 - `PASS` means the chain verifies and every key is linked to your anchor.
-- `UNANCHORED` means the chain verifies but no `--trust-anchor` was given, so
+- `VERIFIED, NOT ANCHORED` means the chain verifies but no `--trust-anchor` was given, so
   nothing links the keys to one you trust. It exits 0; in `--json` output,
   `keyTrust.status` is `no_anchor`. Treat it as unverified provenance, not as
   a clean pass.
@@ -132,7 +132,13 @@ keys (a saved `GET /v1/verification-keys` response works as is, and its
 statements are walked too), `--require-supplied-keys` refuses the export's
 embedded keys, and `--agent-keys <file>` re-verifies the agent signatures an
 OIDC cert sealed on the chain. `--trust-anchor` and `--distrusted-key` are
-repeatable. A malformed value is a usage error (exit 2).
+given once per key. A malformed value, a distrusted key named twice,
+`--distrusted-key` without `--trust-anchor`, and a file that does not exist are
+each a usage error (exit 2), refused before the export is read. The flags,
+these refusals and their messages, the headline words and the exit codes are
+the same as `@agledger/verify`'s `agledger-verify` and the Python
+`agledger-verify`'s, and `--json` output carries their `verdict` (`trusted`,
+`unanchored` or `failed`).
 
 ## Agent-native DX
 

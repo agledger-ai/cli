@@ -733,6 +733,24 @@ describe('verify command', () => {
     expect(out).not.toContain('--keys file');
   });
 
+  // The same inputs, messages and exit codes as @agledger/verify and the
+  // Python agledger-verify: each is refused before the export is read.
+  const APIN = `sha256:${'a'.repeat(64)}`;
+  it.each([
+    [`/nonexistent --trust-anchor abc`, '--trust-anchor "abc" is not sha256:<64 hex>. Each anchor is the full SHA-256'],
+    [`/nonexistent --trust-anchor ${APIN},${APIN}`, `--trust-anchor "${APIN},${APIN}" is not sha256:<64 hex>.`],
+    [`/nonexistent --trust-anchor ${APIN} --distrusted-key ${APIN}@2026-02-30T00:00:00Z`, `--distrusted-key "${APIN}@2026-02-30T00:00:00Z" is not sha256:<64 hex>, optionally followed by @<RFC 3339 instant>`],
+    [`/nonexistent --trust-anchor ${APIN} --distrusted-key ${APIN} --distrusted-key ${APIN}`, `--distrusted-key names ${APIN} twice.`],
+    [`/nonexistent --distrusted-key ${APIN}`, '--distrusted-key acts only inside the key-statement walk, which runs from --trust-anchor; pass the pin as well.'],
+    [`/nonexistent --trust-anchor ${APIN}`, 'Cannot read /nonexistent: no such file or directory.'],
+    [`/nonexistent --distrusted-keys ${APIN}`, '--distrusted-keys is now --distrusted-key, given once per key: --distrusted-key sha256:<hex>[@<RFC 3339 instant>].'],
+    [`/nonexistent --require-out-of-band-keys`, '--require-out-of-band-keys is now --require-supplied-keys'],
+  ])('verify %s exits 2 with the shared message', (args, message) => {
+    const result = run(`verify ${args} --json`);
+    expect(result.exitCode).toBe(2);
+    expect(String(parseJson(result).message).startsWith(message)).toBe(true);
+  });
+
   it('usage error exit 2 on missing file arg', () => {
     const result = run('verify --json');
     expect(result.exitCode).toBe(2);
@@ -804,7 +822,7 @@ describe('verify command', () => {
 
   it('human output says PASS only for an anchored chain, and never reads an unanchored one as a clean pass', () => {
     const none = human(`verify ${VECTORS}/valid.json`);
-    expect(none).toContain('UNANCHORED  Record:');
+    expect(none).toContain('VERIFIED, NOT ANCHORED  Record:');
     expect(none).not.toContain('PASS');
     expect(none).toContain('Keys: not anchored. No --trust-anchor was given');
     expect(none).toContain('against keys nobody pinned');
@@ -826,6 +844,30 @@ describe('verify command', () => {
     expect(substituted).toContain('Broken at position 2: CHAIN_SIGNING_KEY_UNANCHORED');
     expect(substituted).not.toContain('linked to your trust anchor');
     expect(substituted).not.toContain('Hash chain contiguous');
+  });
+
+  it('the headline words and exit code per verdict, as @agledger/verify and the Python agledger-verify print them', () => {
+    const cases: Array<[string, number, string]> = [
+      [`verify ${VECTORS}/valid.json --trust-anchor ${PIN}`, 0, 'PASS  Record:'],
+      [`verify ${VECTORS}/valid.json`, 0, 'VERIFIED, NOT ANCHORED  Record:'],
+      [`verify ${VECTORS}/valid.json --trust-anchor sha256:${'ab'.repeat(32)}`, 1, 'FAIL  Record:'],
+    ];
+    const verdicts = ['trusted', 'unanchored', 'failed'];
+    cases.forEach(([args, code, headline], i) => {
+      let stdout = '';
+      let status = 0;
+      try {
+        stdout = human(args);
+      } catch (err) {
+        stdout = String((err as { stdout?: string }).stdout);
+        status = (err as { status?: number }).status ?? -1;
+      }
+      expect(status).toBe(code);
+      expect(stdout.startsWith(headline)).toBe(true);
+      const json = run(`${args} --json`);
+      expect(json.exitCode).toBe(code);
+      expect(JSON.parse(json.stdout).verdict).toBe(verdicts[i]);
+    });
   });
 
   it('human output names unsigned entries as covered by the hash chain only', () => {
