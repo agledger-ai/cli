@@ -756,9 +756,10 @@ describe('verify command', () => {
     expect(result.exitCode).toBe(2);
   });
 
-  // A live 1.8.0 export whose create, completion and verdict were sent under a
-  // cert with signed bodies, and the cert's public key as the agent kept it.
-  const LIVE = resolve(import.meta.dirname, '../testdata/live-1.8.0');
+  // A live API 2.0.0 export whose create, completion and verdict were sent
+  // under a cert with signed bodies, and the cert's public key as the agent
+  // kept it.
+  const LIVE = resolve(import.meta.dirname, '../testdata/live-2.0.0');
 
   it('counts sealed agent signatures but checks none without --agent-keys', () => {
     const result = run(`verify ${LIVE}/export-cert-lifecycle.json --json`);
