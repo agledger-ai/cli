@@ -22,6 +22,13 @@ import { resolve } from 'node:path';
 
 const BIN = resolve(import.meta.dirname, '../bin/run.js');
 
+/**
+ * A spawn's own deadline. Each one boots node and oclif, which under a loaded
+ * machine (a parallel suite, CI) can take well over 10s; a kill at that point
+ * reads as exit 1 with empty output, a failure that is not the CLI's.
+ */
+const SPAWN_TIMEOUT = 60_000;
+
 /** Run a CLI command, capturing stdout/stderr and exit code. */
 const run = (args: string, env?: Record<string, string>) => {
   try {
@@ -40,7 +47,7 @@ const run = (args: string, env?: Record<string, string>) => {
           HOME: tmpdir(),
           ...env,
         },
-        timeout: 10_000,
+        timeout: SPAWN_TIMEOUT,
       }).trim(),
       stderr: '',
       exitCode: 0,
@@ -247,7 +254,7 @@ describe('agledger api: --input file and stdin', () => {
         encoding: 'utf-8',
         env: { ...process.env, AGLEDGER_API_KEY: 'agl_adm_test', AGLEDGER_API_URL: '', HOME: tmpdir() },
         input: '{"type":"delegated-workflow-v1"}',
-        timeout: 10_000,
+        timeout: SPAWN_TIMEOUT,
       },
     );
     const parsed = JSON.parse(stdout.trim());
