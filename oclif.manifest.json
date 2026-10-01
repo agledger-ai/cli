@@ -723,8 +723,7 @@
       "args": {
         "file": {
           "description": "Path to the audit export JSON file (or \"-\" for stdin).",
-          "name": "file",
-          "required": true
+          "name": "file"
         }
       },
       "description": "Verify a record audit export offline (COSE_Sign1 envelope, RFC 9052; Ed25519 or ES256).",
@@ -817,7 +816,7 @@
           "hidden": true,
           "name": "distrusted-keys",
           "hasDynamicHelp": false,
-          "multiple": true,
+          "multiple": false,
           "type": "option"
         },
         "require-out-of-band-keys": {
@@ -840,6 +839,7 @@
       "pluginName": "@agledger/cli",
       "pluginType": "core",
       "strict": true,
+      "usage": "verify FILE [--trust-anchor <value>...] [--distrusted-key <value>...] [--keys <value>] [--agent-keys <value>] [--require-key-id <value>] [--require-supplied-keys] [--json] [--quiet]",
       "enableJsonFlag": false,
       "isESM": true,
       "relativePath": [
