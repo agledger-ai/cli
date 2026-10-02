@@ -722,10 +722,12 @@ describe('verify command', () => {
     expect(JSON.parse(result.stdout).brokenAt).toMatchObject({ position: 1, code: 'CHAIN_SIGNING_KEY_UNANCHORED' });
   });
 
-  it('a distrusted pin anchors nothing, and --distrusted-key without --trust-anchor is a usage error', () => {
-    const result = run(`verify ${VECTORS}/valid.json --trust-anchor ${PIN} --distrusted-key ${PIN} --json`);
-    expect(result.exitCode).toBe(1);
-    expect(JSON.parse(result.stdout).brokenAt.code).toBe('CHAIN_SIGNING_KEY_UNANCHORED');
+  it('a key both pinned and distrusted, and --distrusted-key without --trust-anchor, are usage errors', () => {
+    for (const distrust of [PIN, `${PIN}@2026-09-01T00:00:00Z`]) {
+      const result = run(`verify ${VECTORS}/valid.json --trust-anchor ${PIN} --distrusted-key ${distrust} --json`);
+      expect(result.exitCode).toBe(2);
+      expect(result.stdout + result.stderr).toContain('INVALID_FIELD');
+    }
     const alone = run(`verify ${VECTORS}/valid.json --distrusted-key ${PIN} --json`);
     expect(alone.exitCode).toBe(2);
     expect(alone.stdout + alone.stderr).toContain('MISSING_INPUT');
@@ -749,6 +751,7 @@ describe('verify command', () => {
     [`/nonexistent --trust-anchor ${APIN} --distrusted-key ${APIN}@2026-02-30T00:00:00Z`, `--distrusted-key "${APIN}@2026-02-30T00:00:00Z" is not sha256:<64 hex>, optionally followed by @<RFC 3339 instant>`],
     [`/nonexistent --trust-anchor ${APIN} --distrusted-key ${APIN} --distrusted-key ${APIN}`, `--distrusted-key names ${APIN} twice.`],
     [`/nonexistent --distrusted-key ${APIN}`, '--distrusted-key acts only inside the key-statement walk, which runs from --trust-anchor; pass the pin as well.'],
+    [`/nonexistent --trust-anchor ${APIN} --distrusted-key ${APIN}@2026-09-01T00:00:00Z`, `${APIN} is both a --trust-anchor and a --distrusted-key. Pin a key you trust and distrust one that leaked, never the same key`],
     [`/nonexistent --trust-anchor ${APIN}`, 'Cannot read /nonexistent: no such file or directory.'],
     [`/nonexistent --distrusted-keys ${APIN}`, '--distrusted-keys is now --distrusted-key, given once per key: --distrusted-key sha256:<hex>[@<RFC 3339 instant>].'],
     [`/nonexistent --require-out-of-band-keys`, '--require-out-of-band-keys is now --require-supplied-keys'],
@@ -924,7 +927,17 @@ describe('verify command', () => {
     writeFileSync(join(dir, 'bad.json'), JSON.stringify({ kty: 'OKP', crv: 'Ed25519' }));
     const result = run(`verify ${LIVE}/export-cert-lifecycle.json --agent-keys ${join(dir, 'bad.json')} --json`);
     expect(result.exitCode).toBe(2);
-    expect(result.stdout + result.stderr).toContain('INVALID_JSON_INPUT');
+    expect(result.stdout + result.stderr).toContain('INVALID_FIELD');
+  });
+
+  it('refuses a --keys window that is not RFC 3339 with a usage error naming the key', () => {
+    const exp = JSON.parse(readFileSync(`${LIVE}/export-cert-lifecycle.json`, 'utf8')) as { exportMetadata: { signingPublicKeys: Record<string, string> } };
+    const [keyId, publicKey] = Object.entries(exp.exportMetadata.signingPublicKeys)[0]!;
+    const dir = mkdtempSync(join(tmpdir(), 'agl-keys-'));
+    writeFileSync(join(dir, 'keys.json'), JSON.stringify({ data: [{ keyId, publicKey, activatedAt: 'yesterday' }] }));
+    const result = run(`verify ${LIVE}/export-cert-lifecycle.json --keys ${join(dir, 'keys.json')} --json`);
+    expect(result.exitCode).toBe(2);
+    expect(parseJson(result)).toMatchObject({ code: 'INVALID_FIELD', message: expect.stringContaining(`(key ${keyId}) has activatedAt "yesterday", which is not an RFC 3339 instant`) });
   });
 });
 

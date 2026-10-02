@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { Args, Flags } from '@oclif/core';
 import {
+  assertNotPinnedAndDistrusted,
   parseDistrustedKeys,
   parseTrustAnchors,
   verifyAuditExport,
@@ -149,6 +150,21 @@ export default class Verify extends BaseCommand {
         'Pass --trust-anchor sha256:<64 hex> with the digest of a vault key you took out of band.',
       );
     }
+    // The Server refuses to start with a key in both VAULT_TRUST_ANCHORS and
+    // VAULT_DISTRUSTED_KEYS, so a pin that is also distrusted is a usage error.
+    try {
+      assertNotPinnedAndDistrusted(trustAnchors, distrustedKeys);
+    } catch (err) {
+      if (err instanceof TypeError) {
+        this.failWith(
+          ErrorCode.INVALID_FIELD,
+          err.message.replace(/^(sha256:[0-9a-f]{64}) is both a trust anchor and a distrusted key\./, '$1 is both a --trust-anchor and a --distrusted-key.'),
+          ExitCode.USAGE_ERROR,
+          'Pin the successor of a key that leaked with --trust-anchor, and keep the leaked key in --distrusted-key.',
+        );
+      }
+      throw err;
+    }
     if (args.file === undefined) {
       this.failWith(
         ErrorCode.MISSING_INPUT,
@@ -204,7 +220,8 @@ export default class Verify extends BaseCommand {
       : undefined;
 
     // verify-core throws TypeError at the supplied-key boundary when the
-    // file's shape is wrong (e.g. {keyId: 42}, [null], "..."). Catch it so the
+    // file's shape is wrong (e.g. {keyId: 42}, [null], "...") or a key window
+    // in it is not RFC 3339: valid JSON, a value refused. Catch it so the
     // CLI emits its structured-error envelope rather than oclif's raw
     // exception trace; agents parsing stderr need {code, message, suggestion},
     // not a stack frame.
@@ -220,11 +237,11 @@ export default class Verify extends BaseCommand {
     } catch (err) {
       if (err instanceof TypeError) {
         this.failWith(
-          ErrorCode.INVALID_JSON_INPUT,
+          ErrorCode.INVALID_FIELD,
           err.message,
           ExitCode.USAGE_ERROR,
           'The --keys file must be a {keyId: SPKI-DER-base64} map or a list of ' +
-            '{keyId, publicKey, ...} entries (the .data list from /v1/verification-keys); ' +
+            '{keyId, publicKey, activatedAt?, retiredAt?} entries with RFC 3339 windows (the /v1/verification-keys body works as is); ' +
             'the --agent-keys file must hold Ed25519 JWKs ({"kty":"OKP","crv":"Ed25519","x":"..."}).',
         );
       }
@@ -234,7 +251,8 @@ export default class Verify extends BaseCommand {
     if (this.isJson) {
       // verify-core's result verbatim, plus the verdict @agledger/verify
       // reports: `valid` alone is true on a run that anchored nothing.
-      this.output({ verdict: verdictOf(result), ...result });
+      const { verdict, ...rest } = result;
+      this.output({ verdict, ...rest });
     } else {
       this.renderHuman(result, agentKeys !== undefined);
     }
@@ -289,7 +307,7 @@ export default class Verify extends BaseCommand {
     // signature. A chain that verifies against keys nobody pinned, or whose
     // anchors verified no signature at all, is not a clean result whatever
     // `valid` says, so it gets its own verdict word.
-    const verdict = verdictOf(result);
+    const verdict = result.verdict;
     const anchored = trust.status === 'walked';
     // The same headline words as @agledger/verify and the Python agledger-verify.
     const icon = verdict === 'failed' ? 'FAIL' : verdict === 'trusted' ? 'PASS' : 'VERIFIED, NOT ANCHORED';
@@ -382,14 +400,4 @@ export default class Verify extends BaseCommand {
       out.write(`       ${failures.length} entries failed verification.\n`);
     }
   }
-}
-
-/**
- * The verdict @agledger/verify reports. Trusted only when the walk ran and
- * verified a signature under an anchored key: `no_anchor` and
- * `no_anchored_signature` are both unanchored, whatever `valid` says.
- */
-function verdictOf(result: VerifyExportResult): 'trusted' | 'unanchored' | 'failed' {
-  if (!result.valid) return 'failed';
-  return result.keyTrust.status === 'walked' ? 'trusted' : 'unanchored';
 }
