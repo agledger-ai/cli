@@ -142,8 +142,11 @@ statements are walked too), `--require-supplied-keys` refuses the export's
 embedded keys, and `--agent-keys <file>` re-verifies the agent signatures an
 OIDC cert sealed on the chain. `--trust-anchor` and `--distrusted-key` are
 given once per key. A malformed value, a distrusted key named twice,
-`--distrusted-key` without `--trust-anchor`, and a file that does not exist are
-each a usage error (exit 2), refused before the export is read. The flags,
+`--distrusted-key` without `--trust-anchor`, a key given to both (the Server
+refuses to start with one, so pin the successor of a key that leaked), and a
+file that does not exist are each a usage error (exit 2), refused before the
+export is read. A `--keys` file whose shape or key window (RFC 3339) is wrong
+is `INVALID_FIELD`, exit 2. The flags,
 these refusals and their messages, the headline words and the exit codes are
 the same as `@agledger/verify`'s `agledger-verify` and the Python
 `agledger-verify`'s, and `--json` output carries their `verdict` (`trusted`,
