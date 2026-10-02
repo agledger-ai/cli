@@ -133,7 +133,10 @@ the signed key statements the export carries from it:
   is the chain failure.
 
 `--distrusted-key sha256:<digest>[@<RFC 3339 instant>]` mirrors the operator's
-`VAULT_DISTRUSTED_KEYS` and needs `--trust-anchor`. `--keys <file>` supplies
+`VAULT_DISTRUSTED_KEYS` and needs `--trust-anchor`: what such a key signed from
+that instant counts for nothing, and a key statement it signed counts for
+nothing at any instant, because the write times an export carries are not
+signed. `--keys <file>` supplies
 keys (a saved `GET /v1/verification-keys` response works as is, and its
 statements are walked too), `--require-supplied-keys` refuses the export's
 embedded keys, and `--agent-keys <file>` re-verifies the agent signatures an
