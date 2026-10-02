@@ -828,6 +828,14 @@ describe('verify command', () => {
     expect(all).toContain('Agent signatures: 6/6 re-verified offline against --agent-keys.');
   });
 
+  it('human output lists a key note: an honest rotation off a key distrusted after it passes, and says what was voided', () => {
+    const fx = resolve(import.meta.dirname, 'fixtures/distrusted-rotation');
+    const { pin, distrust } = JSON.parse(readFileSync(join(fx, 'meta.json'), 'utf-8')) as { pin: string; distrust: string };
+    const out = human(`verify ${fx}/export.json --keys ${fx}/keys.json --trust-anchor ${pin} --distrusted-key ${distrust}`);
+    expect(out).toContain('PASS  Record:');
+    expect(out).toMatch(/Key note: \([0-9a-f]{16}\) a succession by [0-9a-f]{16}, which distrustedKeys distrusts/);
+  });
+
   it('human output says PASS only for an anchored chain, and never reads an unanchored one as a clean pass', () => {
     const none = human(`verify ${VECTORS}/valid.json`);
     expect(none).toContain('VERIFIED, NOT ANCHORED  Record:');
