@@ -331,6 +331,9 @@ export default class Verify extends BaseCommand {
     for (const f of trust.findings) {
       out.write(`       Key finding: ${f.code}${f.keyId ? ` (${f.keyId})` : ''}: ${f.detail}\n`);
     }
+    for (const n of trust.notes) {
+      out.write(`       Key note: ${n.keyId ? `(${n.keyId}) ` : ''}${n.detail}\n`);
+    }
 
     // Agent signatures are checked only against keys the caller supplies, so
     // the lines below say exactly how many were, and the PASS line speaks for
