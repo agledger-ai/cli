@@ -937,8 +937,7 @@ describe('verify command: conformance corpus (manifest-export.json)', () => {
     options?: {
       keysFile?: string;
       requireKeyId?: string;
-      /** The manifest's name for --require-supplied-keys (API-owned corpus). */
-      requireOutOfBandKeys?: boolean;
+      requireSuppliedKeys?: boolean;
       /**
        * A JSON array of agent cert public keys. Unmapped, a vector expecting
        * CHAIN_AGENT_SIGNATURE_INVALID runs with no agent keys, the check
@@ -960,9 +959,16 @@ describe('verify command: conformance corpus (manifest-export.json)', () => {
     if (vector.options?.agentKeysFile) {
       flags += ` --agent-keys ${join(CONFORMANCE, vector.options.agentKeysFile)}`;
     }
-    if (vector.options?.requireOutOfBandKeys) flags += ' --require-supplied-keys';
+    if (vector.options?.requireSuppliedKeys) flags += ' --require-supplied-keys';
     return flags;
   };
+  // An option flagsFor does not map runs the vector without it, and a renamed
+  // key then passes or fails for the wrong reason.
+  it('maps every option the manifest uses', () => {
+    const mapped = new Set(['keysFile', 'requireKeyId', 'requireSuppliedKeys', 'agentKeysFile']);
+    const used = new Set(manifest.vectors.flatMap((v) => Object.keys(v.options ?? {})));
+    expect([...used].filter((k) => !mapped.has(k))).toEqual([]);
+  });
   interface Parsed {
     valid: boolean;
     brokenAt?: { code: string; position: number };
