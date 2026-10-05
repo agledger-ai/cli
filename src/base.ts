@@ -156,6 +156,20 @@ function apiUrlOrigin(fromFlagOrEnv: boolean, profileName: string | undefined): 
   return argvHasFlag('--api-url') ? '--api-url' : 'AGLEDGER_API_URL';
 }
 
+/**
+ * The request timeout override. Undocumented seam for tests, which cannot wait
+ * out the 30 s default: unset, malformed or non-positive means the client's own.
+ */
+function requestTimeoutMs(): number | undefined {
+  const raw = Number(process.env.AGLEDGER_REQUEST_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : undefined;
+}
+
+/** The advice for a write whose outcome is unknown: replay it under the key it carried. */
+function retryWithKey(key: string): string {
+  return `Rerun the same command with --idempotency-key ${key}: the Server then replays the first attempt's result instead of recording the work twice, where a rerun without it mints a new key and can create a duplicate.`;
+}
+
 function isPublicPath(method: string, path: string): boolean {
   if (method.toUpperCase() !== 'GET') return false;
   const bare = (path.split('?')[0] ?? path).replace(/\/+$/, '') || '/';
@@ -168,6 +182,10 @@ export abstract class BaseCommand extends Command {
   private lastApiUrl?: string;
   /** The client `callApi` built for this invocation, reused by every later call. */
   private client?: ApiClient;
+  /** The Idempotency-Key the most recent POST went out under, so a timeout or a
+   *  dropped connection can hand it back for the retry. Undefined for any other
+   *  method: the API ignores the header there, so there is no key to claim. */
+  private sentIdempotencyKey?: string;
 
   static baseFlags = {
     json: Flags.boolean({ description: 'Force JSON output (default when stdout is piped)', default: false }),
@@ -263,18 +281,10 @@ export abstract class BaseCommand extends Command {
     const { credential, profileName, profile } = this.resolveCredential(flags);
     const flagUrl = flags['api-url'] || undefined;
 
-    // A profile is only consulted when nothing more explicit supplied a
-    // credential. If the caller explicitly named a missing profile AND has
-    // nothing else to fall back on, that's an error worth surfacing (rather
-    // than a generic no-credential one).
-    if (flags.profile && !profile && credential.kind === 'none') {
-      this.failWith(
-        ErrorCode.AUTH_REQUIRED,
-        `Profile '${flags.profile}' not found.`,
-        ExitCode.AUTH_ERROR,
-        'Run `agledger config list` to see profiles, or `agledger login --profile <name>` to create one.',
-      );
-    }
+    // A --profile that names nothing is a mistake whatever else is set: an
+    // env key or --api-key would otherwise run the call as a credential the
+    // caller did not mean, with no sign that the profile was ignored.
+    this.requireNamedProfile(flags, profile);
 
     // The URL is checked before the credential: without a usable URL there is
     // no Server to authenticate to, so a missing or malformed one is the first
@@ -301,6 +311,7 @@ export abstract class BaseCommand extends Command {
     }
 
     this.lastApiUrl = apiUrl;
+    const timeoutMs = requestTimeoutMs();
     const onBehalfOfSource = envOnBehalfOfSource();
     this.verboseLog(flags, {
       event: 'auth',
@@ -311,15 +322,27 @@ export abstract class BaseCommand extends Command {
     const onBehalfOf = onBehalfOfSource ? new DelegationToken(onBehalfOfSource) : null;
 
     if (credential.kind === 'oidc') {
-      return new ApiClient(apiUrl, this.oidcCredential(flags, credential), this.config.version, undefined, onBehalfOf);
+      return new ApiClient(apiUrl, this.oidcCredential(flags, credential), this.config.version, timeoutMs, onBehalfOf);
     }
     return new ApiClient(
       apiUrl,
       credential.kind === 'api-key' ? credential.key : null,
       this.config.version,
-      undefined,
+      timeoutMs,
       onBehalfOf,
     );
+  }
+
+  /** Exit 3 when `--profile` names a profile that is not stored. */
+  protected requireNamedProfile(flags: { profile?: string }, profile: Profile | undefined): void {
+    if (flags.profile && !profile) {
+      this.failWith(
+        ErrorCode.AUTH_REQUIRED,
+        `Profile '${flags.profile}' not found.`,
+        ExitCode.AUTH_ERROR,
+        'Run `agledger config list` to see profiles, or `agledger login --profile <name>` to create one.',
+      );
+    }
   }
 
   /** Refuse an API URL that is not an absolute http(s) URL, naming where it came from. */
@@ -381,6 +404,7 @@ export abstract class BaseCommand extends Command {
     profile?: string;
   } {
     const { credential, profileName, profile } = this.resolveCredential(flags);
+    this.requireNamedProfile(flags, profile);
     const flagUrl = flags['api-url'] || undefined;
     // Null, not a placeholder. `agledger.example.com` was removed from
     // `createApiClient`, which now refuses to build a client without a URL, but
@@ -437,7 +461,17 @@ export abstract class BaseCommand extends Command {
       // Same refusal a fresh client would give for a path that needs a credential.
       this.createApiClient(flags, { allowAnonymous });
     }
-    return this.client.request(method, path, options);
+    // The key is minted here rather than inside the client so the CLI knows it:
+    // a timeout must be able to say which key the lost request carried.
+    let sent = options;
+    this.sentIdempotencyKey = undefined;
+    if (method.toUpperCase() === 'POST') {
+      const idempotencyKey = options?.idempotencyKey ?? crypto.randomUUID();
+      sent = { ...options, idempotencyKey };
+      this.sentIdempotencyKey = idempotencyKey;
+      this.verboseLog(flags, { event: 'request', method: 'POST', path, idempotencyKey });
+    }
+    return this.client.request(method, path, sent);
   }
 
   protected output(data: unknown): void {
@@ -512,9 +546,16 @@ export abstract class BaseCommand extends Command {
     return this.parseJsonInput(content, path === '-' ? 'stdin' : `${fieldName} ${path}`, suggestion);
   }
 
-  protected failWith(code: string, message: string, exitCode: number, suggestion?: string): never {
+  protected failWith(
+    code: string,
+    message: string,
+    exitCode: number,
+    suggestion?: string,
+    extra?: Record<string, unknown>,
+  ): never {
     const error: Record<string, unknown> = { error: true, code, message };
     if (suggestion) error.suggestion = suggestion;
+    if (extra) Object.assign(error, extra);
     process.stderr.write(JSON.stringify(error) + '\n');
     this.exit(exitCode);
     throw new Error('unreachable');
@@ -562,11 +603,15 @@ export abstract class BaseCommand extends Command {
       throw new Error('unreachable');
     }
     if (err instanceof DOMException && err.name === 'AbortError') {
+      const key = this.sentIdempotencyKey;
       this.failWith(
         ErrorCode.TIMEOUT,
         'Request timed out.',
         ExitCode.TIMEOUT,
-        'Retry the same command. If it persists, run `agledger discover` to check API connectivity.',
+        key
+          ? `The Server may have processed the request before the timeout. ${retryWithKey(key)}`
+          : 'Retry the same command. If it persists, run `agledger discover` to check API connectivity.',
+        key ? { idempotencyKey: key } : undefined,
       );
     }
     if (err instanceof TypeError && String(err.message).includes('fetch')) {
@@ -578,6 +623,10 @@ export abstract class BaseCommand extends Command {
       const causeMessage = typeof cause?.message === 'string' ? cause.message : undefined;
       const target = this.lastApiUrl ? ` connecting to ${this.lastApiUrl}` : '';
       const detail = causeCode ?? causeMessage;
+      // Refused and unresolved connections never carried the request, so a
+      // retry cannot duplicate it. Anything else (a reset, a closed socket)
+      // may have dropped the connection after the Server had the body.
+      const key = causeCode === 'ENOTFOUND' || causeCode === 'ECONNREFUSED' ? undefined : this.sentIdempotencyKey;
       this.failWith(
         ErrorCode.NETWORK_ERROR,
         `${String(err.message)}${target}${detail ? ` (${detail})` : ''}`,
@@ -586,7 +635,10 @@ export abstract class BaseCommand extends Command {
           ? 'The host does not resolve. Check the API URL for a typo, and that DNS can see it from here.'
           : causeCode === 'ECONNREFUSED'
             ? 'The host resolved but refused the connection. Check the Server is running and the port is right.'
-            : 'Check the API URL and that the Server is reachable from here.',
+            : key
+              ? `The connection failed after the request may have been sent. ${retryWithKey(key)}`
+              : 'Check the API URL and that the Server is reachable from here.',
+        key ? { idempotencyKey: key } : undefined,
       );
     }
     this.failWith(

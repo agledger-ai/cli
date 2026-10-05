@@ -4,7 +4,7 @@ import { readConfig, writeConfig } from '../util/config.js';
 
 export default class Logout extends BaseCommand {
   static override description =
-    'Remove a stored profile from ~/.agledger/config.json: the active profile, the one named by --profile, or every profile with --all. Exits 2 when there is no such profile to remove.';
+    'Remove a stored profile from ~/.agledger/config.json: the active profile, the one named by --profile, or every profile with --all. Exits 2 when there is no such profile to remove. Removing the active profile leaves none active: pick another with `config use`.';
 
   static override examples = [
     '<%= config.bin %> logout',
@@ -24,6 +24,14 @@ export default class Logout extends BaseCommand {
 
     if (flags.all) {
       const removed = Object.keys(config.profiles);
+      if (removed.length === 0) {
+        this.failWith(
+          ErrorCode.MISSING_INPUT,
+          'No profiles are stored, so nothing was removed.',
+          ExitCode.USAGE_ERROR,
+          'Run `agledger login` to store one.',
+        );
+      }
       writeConfig({ profiles: {} });
       this.output({ loggedOut: true, removedProfiles: removed });
       return;
@@ -51,11 +59,20 @@ export default class Logout extends BaseCommand {
     }
 
     delete config.profiles[name];
-    if (config.activeProfile === name) {
-      const remaining = Object.keys(config.profiles);
-      config.activeProfile = remaining[0];
-    }
+    // Logging out the active profile leaves none active. Promoting whichever
+    // profile came first would quietly switch the next call to a different
+    // identity (an admin key, say), so the caller picks one with `config use`.
+    const wasActive = config.activeProfile === name;
+    if (wasActive) delete config.activeProfile;
     writeConfig(config);
-    this.output({ loggedOut: true, profile: name, activeProfile: config.activeProfile });
+    const remaining = Object.keys(config.profiles);
+    this.output({
+      loggedOut: true,
+      profile: name,
+      activeProfile: config.activeProfile ?? null,
+      ...(wasActive && remaining.length > 0
+        ? { note: `No profile is active now. Run \`agledger config use <name>\` to choose one of: ${remaining.join(', ')}.` }
+        : {}),
+    });
   }
 }

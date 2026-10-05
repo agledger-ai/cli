@@ -69,7 +69,7 @@ export default class Api extends BaseCommand {
     }),
     'idempotency-key': Flags.string({
       description:
-        'Dedup key for POST, max 256 chars. One is generated per call, so pass this only when retrying a call that may already have reached the Server: reuse the first attempt\'s key and it replays the original result instead of creating a second record. Bound to method, route and body, so a retry with a changed body is rejected.',
+        'Dedup key for POST, max 256 chars. One is generated per call and shown by --verbose, and a TIMEOUT or dropped-connection error carries it as `idempotencyKey`. Pass this only when retrying a call that may already have reached the Server: reuse the first attempt\'s key and it replays the original result instead of creating a second record, where a rerun without it can create a duplicate. Bound to method, route and body, so a retry with a changed body is rejected.',
     }),
     'dry-run': Flags.boolean({
       description: 'Show the request that would be sent without calling the API.',
@@ -148,7 +148,8 @@ export default class Api extends BaseCommand {
             path: args.path,
             ...options,
             // A generated key is minted inside the client at send time, so
-            // printing a concrete UUID here would name one that never ships.
+            // printing a concrete UUID here would name one that never ships. The real
+            // one is shown by --verbose and carried by a TIMEOUT error.
             ...(method === 'POST' && options.idempotencyKey === undefined
               ? { idempotencyKey: '<generated at send time>' }
               : {}),

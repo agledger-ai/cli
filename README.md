@@ -161,9 +161,9 @@ the same as `@agledger/verify`'s `agledger-verify` and the Python
 - `--json` on every command (auto when stdout is piped)
 - `--quiet` suppresses output (exit code only)
 - `--dry-run` on `agledger api` shows the request without sending
-- `--verbose` on every command reports which credential was used, and each OIDC cert exchange, as JSON lines on stderr; it never prints a key, token or cert
+- `--verbose` on every command reports which credential was used, and each OIDC cert exchange, as JSON lines on stderr; it never prints a key, token or cert. A POST also reports the `Idempotency-Key` it goes out under (`{"event":"request",...}`)
 - `--paginate` on GET follows cursor pagination and streams NDJSON
-- Every POST carries a generated `Idempotency-Key`, so one invocation is replay-safe on its own. Retrying a call that may already have reached the Server? Pass `--idempotency-key` with the first attempt's key and the Server replays the original result instead of recording the work twice
+- Every POST carries a generated `Idempotency-Key`, so one invocation is replay-safe on its own. Retrying a call that may already have reached the Server? Pass `--idempotency-key` with the first attempt's key and the Server replays the original result instead of recording the work twice. When a POST times out (exit 10, `TIMEOUT`) or its connection drops after the request went out (exit 9, `NETWORK_ERROR`), the error carries the key it sent as `idempotencyKey` and the suggestion is the rerun: `agledger api POST ... --idempotency-key <key>`. A plain rerun mints a new key and can record the work twice. A GET has no key, and neither does a connection that was refused or never resolved, since nothing was sent
 - Structured errors on stderr: the CLI's own are `{error: true, code, message, suggestion, ...}`; an API error passes through verbatim as the Server's RFC 9457 body, whose human-readable text is `detail`
 - Semantic exit codes: 0 (OK), 1 (general), 2 (usage), 3 (auth), 4 (forbidden), 5 (not found), 6 (conflict), 7 (rate limit), 8 (server), 9 (network), 10 (timeout). **1 is the catch-all**: an API error whose status maps to nothing more specific (a 400, for example) exits 1, as does a chain that fails `agledger verify`. Read the `code` field on stderr to tell them apart, and treat any non-zero as failure rather than keying on 1 alone.
 - `NO_COLOR` supported per [no-color.org](https://no-color.org)
@@ -184,7 +184,7 @@ agledger api GET /openapi.json          # Full API route catalog
 | `api` | Call any API endpoint |
 | `discover` | Health + identity + scopes + quickstart |
 | `login` | Verify an API key (or, with `--oidc`, an OIDC token source) and store it in `~/.agledger/config.json` (0600) |
-| `logout` | Remove the active profile, the one named by `--profile`, or all of them with `--all`; exits 2 `MISSING_INPUT` when there is no such profile |
+| `logout` | Remove the active profile, the one named by `--profile`, or all of them with `--all`; exits 2 `MISSING_INPUT` when there is no such profile to remove. Removing the active profile leaves none active (`activeProfile: null` in the output): pick another with `config use` |
 | `auth` | Check current login state and show the identity, including the OIDC cert (exit 0 when nothing is configured) |
 | `config` | `list` / `get` / `use <profile>` / `path` |
 | `verify` | Offline audit export verification (COSE_Sign1, RFC 9052; Ed25519 or ES256; no network). `--trust-anchor sha256:<digest>` anchors the keys to one you pinned; see [Verifying an export offline](#verifying-an-export-offline) |
