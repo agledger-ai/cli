@@ -465,12 +465,47 @@ describe('login + logout + config', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  it('logout on non-existent profile reports nothing removed', () => {
+  it('logout on non-existent profile says nothing was removed and exits 2', () => {
     const home = isolatedHome();
     const result = run('logout --profile ghost --json', { HOME: home });
+    expect(result.exitCode).toBe(2);
+    const parsed = parseJson(result);
+    expect(parsed.code).toBe('MISSING_INPUT');
+    expect(String(parsed.message)).toContain("'ghost'");
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('logout with no profiles at all exits 2 rather than reporting success', () => {
+    const home = isolatedHome();
+    const result = run('logout --json', { HOME: home });
+    expect(result.exitCode).toBe(2);
+    expect(parseJson(result).code).toBe('MISSING_INPUT');
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  // A plain logout used to act on the profile named `default`, so after
+  // `config use prod` it removed nothing, exited 0, and left prod in use.
+  it('logout with no flags removes the active profile, not one named default', () => {
+    const home = isolatedHome();
+    const configDir = join(home, '.agledger');
+    mkdirSync(configDir, { recursive: true, mode: 0o700 });
+    const configPath = join(configDir, 'config.json');
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        profiles: { default: { apiKey: 'k1' }, prod: { apiKey: 'k2', apiUrl: 'https://prod.example' } },
+        activeProfile: 'default',
+      }),
+      { flag: 'w', mode: 0o600 },
+    );
+    expect(run('config use prod --json', { HOME: home }).exitCode).toBe(0);
+
+    const result = run('logout --json', { HOME: home });
     expect(result.exitCode).toBe(0);
-    const parsed = JSON.parse(result.stdout);
-    expect(parsed.loggedOut).toBe(false);
+    expect(JSON.parse(result.stdout)).toMatchObject({ loggedOut: true, profile: 'prod', activeProfile: 'default' });
+    const final = JSON.parse(readFileSync(configPath, 'utf-8'));
+    expect(final.profiles).not.toHaveProperty('prod');
+    expect(final.profiles).toHaveProperty('default');
     rmSync(home, { recursive: true, force: true });
   });
 
