@@ -115,6 +115,7 @@ export default class Login extends BaseCommand {
         'Pass --api-url <url> or set AGLEDGER_API_URL.',
       );
     }
+    this.requireUsableApiUrl(apiUrl, argvHasFlag('--api-url') ? '--api-url' : 'AGLEDGER_API_URL');
 
     // The command outranks the file, as it does at call time.
     const source = command

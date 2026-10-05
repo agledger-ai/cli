@@ -50,8 +50,8 @@ export const ErrorCode = {
   OIDC_TOKEN_SOURCE_FAILED: 'OIDC_TOKEN_SOURCE_FAILED',
   /** The Server refused `POST /v1/auth/oidc/cert`; its error body rides along as `apiError`. */
   OIDC_EXCHANGE_FAILED: 'OIDC_EXCHANGE_FAILED',
-  /** Required configuration (currently the API URL) is absent. Exits as a
-   *  usage error rather than claiming a new exit code. */
+  /** Required configuration (currently the API URL) is absent or unusable.
+   *  Exits as a usage error rather than claiming a new exit code. */
   CONFIG_ERROR: 'CONFIG_ERROR',
   COMMAND_NOT_FOUND: 'COMMAND_NOT_FOUND',
   MISSING_INPUT: 'MISSING_INPUT',
@@ -130,6 +130,30 @@ export function envOnBehalfOfSource(): OidcTokenSource | undefined {
  *  as opposed to reaching oclif through its `env` binding. */
 export function argvHasFlag(flag: string): boolean {
   return process.argv.some((a) => a === flag || a.startsWith(`${flag}=`));
+}
+
+/**
+ * Why an API URL cannot be used, or undefined when it can. Only an absolute
+ * http(s) URL can be: `new URL` alone takes `localhost:3100` as a URL whose
+ * scheme is `localhost:`, which then fails at request time as a fetch error.
+ */
+export function apiUrlProblem(url: string): string | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return 'is not a URL';
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return `has scheme '${parsed.protocol}', and only http: and https: are supported`;
+  }
+  return undefined;
+}
+
+/** Where the API URL in use came from, for a CONFIG_ERROR that has to name it. */
+function apiUrlOrigin(fromFlagOrEnv: boolean, profileName: string | undefined): string {
+  if (!fromFlagOrEnv) return `profile '${profileName ?? ''}' apiUrl`;
+  return argvHasFlag('--api-url') ? '--api-url' : 'AGLEDGER_API_URL';
 }
 
 function isPublicPath(method: string, path: string): boolean {
@@ -236,7 +260,7 @@ export abstract class BaseCommand extends Command {
    * AGLedger is self-hosted.
    */
   protected createApiClient(flags: AuthFlags, options?: { allowAnonymous?: boolean }): ApiClient {
-    const { credential, profile } = this.resolveCredential(flags);
+    const { credential, profileName, profile } = this.resolveCredential(flags);
     const flagUrl = flags['api-url'] || undefined;
 
     // A profile is only consulted when nothing more explicit supplied a
@@ -252,13 +276,9 @@ export abstract class BaseCommand extends Command {
       );
     }
 
-    // Discovery surfaces answer without auth, so a credential-less invocation
-    // proceeds anonymously rather than being refused before any request is
-    // made. The Server, not the CLI, decides what needs a key.
-    if (credential.kind === 'none' && !options?.allowAnonymous) {
-      this.failWith(ErrorCode.AUTH_REQUIRED, 'No credential configured.', ExitCode.AUTH_ERROR, CREDENTIAL_SOURCES);
-    }
-
+    // The URL is checked before the credential: without a usable URL there is
+    // no Server to authenticate to, so a missing or malformed one is the first
+    // thing to fix, and it is a configuration error (exit 2), not an auth one.
     // No placeholder: a default of agledger.example.com resolved nowhere and
     // turned a missing config into a DNS failure the user could not read.
     // Every deployment is self-hosted, so there is no sane default.
@@ -270,6 +290,14 @@ export abstract class BaseCommand extends Command {
         ExitCode.USAGE_ERROR,
         'Pass --api-url <url>, set AGLEDGER_API_URL, or run `agledger login --api-url <url> --api-key <key>`.',
       );
+    }
+    this.requireUsableApiUrl(apiUrl, apiUrlOrigin(flagUrl !== undefined, profileName));
+
+    // Discovery surfaces answer without auth, so a credential-less invocation
+    // proceeds anonymously rather than being refused before any request is
+    // made. The Server, not the CLI, decides what needs a key.
+    if (credential.kind === 'none' && !options?.allowAnonymous) {
+      this.failWith(ErrorCode.AUTH_REQUIRED, 'No credential configured.', ExitCode.AUTH_ERROR, CREDENTIAL_SOURCES);
     }
 
     this.lastApiUrl = apiUrl;
@@ -292,6 +320,19 @@ export abstract class BaseCommand extends Command {
       undefined,
       onBehalfOf,
     );
+  }
+
+  /** Refuse an API URL that is not an absolute http(s) URL, naming where it came from. */
+  protected requireUsableApiUrl(apiUrl: string, origin: string): void {
+    const problem = apiUrlProblem(apiUrl);
+    if (problem) {
+      this.failWith(
+        ErrorCode.CONFIG_ERROR,
+        `The API URL from ${origin} (${JSON.stringify(apiUrl)}) ${problem}.`,
+        ExitCode.USAGE_ERROR,
+        'Give the full base URL of your AGLedger Server, scheme included, for example https://agledger.internal or http://localhost:3000.',
+      );
+    }
   }
 
   /** Build a cert credential for one invocation. Its key pair never leaves memory. */
@@ -348,6 +389,7 @@ export abstract class BaseCommand extends Command {
     // use: the unconfigured case printed agledger.example.com and exited 0
     // while the same invocation without --dry-run exited 2 with CONFIG_ERROR.
     const apiUrl = flagUrl ?? profile?.apiUrl ?? null;
+    const problem = apiUrl === null ? undefined : apiUrlProblem(apiUrl);
 
     const mask = (k: string): string => (k.length <= 4 ? '****' : `****${k.slice(-4)}`);
     const source = credential.kind === 'none' ? 'none' : credential.from;
@@ -363,6 +405,11 @@ export abstract class BaseCommand extends Command {
         ? {
             apiUrlSource:
               'unconfigured: this call would fail with CONFIG_ERROR (exit 2). Pass --api-url <url>, set AGLEDGER_API_URL, or run `agledger login --api-url <url> --api-key <key>`.',
+          }
+        : {}),
+      ...(problem
+        ? {
+            apiUrlSource: `unusable: the API URL from ${apiUrlOrigin(flagUrl !== undefined, profileName)} ${problem}, so this call would fail with CONFIG_ERROR (exit 2).`,
           }
         : {}),
       ...(source === 'profile' && profileName ? { profile: profileName } : {}),

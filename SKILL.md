@@ -7,7 +7,7 @@ Credentials resolve per command with this precedence: `--api-key` flag > `AGLEDG
 
 OIDC instead of an API key: set `AGLEDGER_OIDC_TOKEN_CMD` to a command that prints an OIDC JWT from your identity provider, or `AGLEDGER_OIDC_TOKEN_FILE` to a file holding one (optional `AGLEDGER_OIDC_AGENT_ID`, an assertion only: the token decides the agent, and a different id, or any id on a token bound to no agent, is 403 `CERT_AGENT_BINDING_MISMATCH`; bind the agent with `PATCH /v1/agents/{id}` and `oidcIss`/`oidcSub`, or `claimMapping.agent_id` on the trusted issuer). The CLI exchanges a fresh token for a short-lived cert on each invocation, signs request bodies with a key held only in memory, and re-exchanges on expiry or a 401. `agledger auth` shows the cert identity; `--verbose` names the credential source on stderr. Failures: `OIDC_TOKEN_SOURCE_FAILED` (exit 3, names the variable, carries the command's stderr) and `OIDC_EXCHANGE_FAILED` (forwards the Server error and its `recoveryHint`).
 
-**There is no default API URL, and it is not optional.** AGLedger is self-hosted, so the CLI has no server to guess. If none of those three sources supplies one, the command exits 2 with `CONFIG_ERROR` rather than calling a placeholder host.
+**There is no default API URL, and it is not optional.** AGLedger is self-hosted, so the CLI has no server to guess. If none of those three sources supplies one, or the one it supplies is not an absolute `http(s)` URL, the command exits 2 with `CONFIG_ERROR` rather than calling a placeholder host. The URL is checked before the credential.
 
 ## Primary command: `agledger api`
 Call any API endpoint:
