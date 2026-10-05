@@ -73,7 +73,8 @@ export default class Verify extends BaseCommand {
       description:
         'sha256:<64 hex>, optionally @<RFC 3339 instant>: a key the operator distrusts, as in the ' +
         'Server\'s VAULT_DISTRUSTED_KEYS. What it signed from that instant (with none, from its ' +
-        'retirement) counts for nothing in the walk. Requires --trust-anchor. Repeatable.',
+        'retirement) counts for nothing in the walk. Requires --trust-anchor. A dated entry may name a ' +
+        'key also given to --trust-anchor, which then vouches for what it signed before the instant. Repeatable.',
     }),
     'agent-keys': Flags.string({
       description:
@@ -150,17 +151,18 @@ export default class Verify extends BaseCommand {
         'Pass --trust-anchor sha256:<64 hex> with the digest of a vault key you took out of band.',
       );
     }
-    // The Server refuses to start with a key in both VAULT_TRUST_ANCHORS and
-    // VAULT_DISTRUSTED_KEYS, so a pin that is also distrusted is a usage error.
+    // The Server refuses to start with a key in VAULT_TRUST_ANCHORS that
+    // VAULT_DISTRUSTED_KEYS names with no instant, so that pair is a usage
+    // error. A dated entry beside a pin is taken.
     try {
       assertNotPinnedAndDistrusted(trustAnchors, distrustedKeys);
     } catch (err) {
       if (err instanceof TypeError) {
         this.failWith(
           ErrorCode.INVALID_FIELD,
-          err.message.replace(/^(sha256:[0-9a-f]{64}) is both a trust anchor and a distrusted key\./, '$1 is both a --trust-anchor and a --distrusted-key.'),
+          err.message.replace(/^(sha256:[0-9a-f]{64}) is a trust anchor and a distrusted key with no instant,/, '$1 is a --trust-anchor and a --distrusted-key with no instant,'),
           ExitCode.USAGE_ERROR,
-          'Pin the successor of a key that leaked with --trust-anchor, and keep the leaked key in --distrusted-key.',
+          'Keep the pin and give the leaked key its instant: --distrusted-key sha256:<64 hex>@<RFC 3339 instant>. Or, if you vouch for nothing it signed, drop its --trust-anchor.',
         );
       }
       throw err;
