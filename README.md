@@ -136,14 +136,18 @@ the signed key statements the export carries from it:
 `VAULT_DISTRUSTED_KEYS` and needs `--trust-anchor`: what such a key signed from
 that instant counts for nothing, and a key statement it signed counts for
 nothing at any instant, because the write times an export carries are not
-signed. `--keys <file>` supplies
+signed. A dated `--distrusted-key` may name a key also given to
+`--trust-anchor`, as the Server's key-compromise runbook does: the pin then
+vouches for what the key signed before the instant. An export accounts for
+nothing a distrusted key signed; such entries fail here, and only a full dump
+verified with `@agledger/verify` lists them as accounted for. `--keys <file>` supplies
 keys (a saved `GET /v1/verification-keys` response works as is, and its
 statements are walked too), `--require-supplied-keys` refuses the export's
 embedded keys, and `--agent-keys <file>` re-verifies the agent signatures an
 OIDC cert sealed on the chain. `--trust-anchor` and `--distrusted-key` are
 given once per key. A malformed value, a distrusted key named twice,
-`--distrusted-key` without `--trust-anchor`, a key given to both (the Server
-refuses to start with one, so pin the successor of a key that leaked), and a
+`--distrusted-key` without `--trust-anchor`, a pinned key distrusted with no
+instant (the Server refuses to start with that pair), and a
 file that does not exist are each a usage error (exit 2), refused before the
 export is read. A `--keys` file whose shape or key window (RFC 3339) is wrong
 is `INVALID_FIELD`, exit 2. The flags,

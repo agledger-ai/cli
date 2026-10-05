@@ -722,15 +722,23 @@ describe('verify command', () => {
     expect(JSON.parse(result.stdout).brokenAt).toMatchObject({ position: 1, code: 'CHAIN_SIGNING_KEY_UNANCHORED' });
   });
 
-  it('a key both pinned and distrusted, and --distrusted-key without --trust-anchor, are usage errors', () => {
-    for (const distrust of [PIN, `${PIN}@2026-09-01T00:00:00Z`]) {
-      const result = run(`verify ${VECTORS}/valid.json --trust-anchor ${PIN} --distrusted-key ${distrust} --json`);
-      expect(result.exitCode).toBe(2);
-      expect(result.stdout + result.stderr).toContain('INVALID_FIELD');
-    }
+  it('a pinned key distrusted with no instant, and --distrusted-key without --trust-anchor, are usage errors', () => {
+    const result = run(`verify ${VECTORS}/valid.json --trust-anchor ${PIN} --distrusted-key ${PIN} --json`);
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout + result.stderr).toContain('INVALID_FIELD');
     const alone = run(`verify ${VECTORS}/valid.json --distrusted-key ${PIN} --json`);
     expect(alone.exitCode).toBe(2);
     expect(alone.stdout + alone.stderr).toContain('MISSING_INPUT');
+  });
+
+  it('a pin beside a dated --distrusted-key for the same key is taken: it vouches for what the key signed before the instant', () => {
+    const after = run(`verify ${VECTORS}/valid.json --trust-anchor ${PIN} --distrusted-key ${PIN}@2099-01-01T00:00:00Z --json`);
+    expect(after.exitCode).toBe(0);
+    expect(JSON.parse(after.stdout)).toMatchObject({ verdict: 'trusted', keyTrust: { accounted: [] } });
+    // An export accounts for nothing: what the key signed from the instant on fails.
+    const before = run(`verify ${VECTORS}/valid.json --trust-anchor ${PIN} --distrusted-key ${PIN}@2026-09-01T00:00:00Z --json`);
+    expect(before.exitCode).toBe(1);
+    expect(JSON.parse(before.stdout).brokenAt).toMatchObject({ code: 'CHAIN_KEY_EXPIRED' });
   });
 
   it('a malformed --trust-anchor is a usage error naming the flag, not the keys file', () => {
@@ -751,7 +759,8 @@ describe('verify command', () => {
     [`/nonexistent --trust-anchor ${APIN} --distrusted-key ${APIN}@2026-02-30T00:00:00Z`, `--distrusted-key "${APIN}@2026-02-30T00:00:00Z" is not sha256:<64 hex>, optionally followed by @<RFC 3339 instant>`],
     [`/nonexistent --trust-anchor ${APIN} --distrusted-key ${APIN} --distrusted-key ${APIN}`, `--distrusted-key names ${APIN} twice.`],
     [`/nonexistent --distrusted-key ${APIN}`, '--distrusted-key acts only inside the key-statement walk, which runs from --trust-anchor; pass the pin as well.'],
-    [`/nonexistent --trust-anchor ${APIN} --distrusted-key ${APIN}@2026-09-01T00:00:00Z`, `${APIN} is both a --trust-anchor and a --distrusted-key. Pin a key you trust and distrust one that leaked, never the same key`],
+    [`/nonexistent --trust-anchor ${APIN} --distrusted-key ${APIN}`, `${APIN} is a --trust-anchor and a --distrusted-key with no instant, which leaves the pin nothing to vouch for. Give the distrust entry the instant the key leaked`],
+    [`/nonexistent --trust-anchor ${APIN} --distrusted-key ${APIN}@2026-09-01T00:00:00Z`, 'Cannot read /nonexistent: no such file or directory.'],
     [`/nonexistent --trust-anchor ${APIN}`, 'Cannot read /nonexistent: no such file or directory.'],
     [`/nonexistent --distrusted-keys ${APIN}`, '--distrusted-keys is now --distrusted-key, given once per key: --distrusted-key sha256:<hex>[@<RFC 3339 instant>].'],
     [`/nonexistent --require-out-of-band-keys`, '--require-out-of-band-keys is now --require-supplied-keys'],
