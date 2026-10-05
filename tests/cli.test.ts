@@ -984,6 +984,25 @@ describe('verify command', () => {
       expect(text).not.toMatch(/distrustedKeys|trustAnchors/);
     });
 
+    it('rewords prose only: a data field that spells an option name passes through as it is', () => {
+      const doc = JSON.parse(readFileSync(X, 'utf-8'));
+      doc.exportMetadata.recordId = 'distrustedKeys';
+      doc.verificationGuide = { ...doc.verificationGuide, unsignedFields: ['trustAnchors', 'requireKeyId'] };
+      const dir = mkdtempSync(join(tmpdir(), 'agl-datafield-'));
+      try {
+        writeFileSync(join(dir, 'export.json'), JSON.stringify(doc));
+        const json = run(`verify ${join(dir, 'export.json')} --trust-anchor ${F} --json`);
+        expect(json.exitCode).toBe(1);
+        const parsed = JSON.parse(json.stdout);
+        expect(parsed.recordId).toBe('distrustedKeys');
+        expect(parsed.unsignedProjectionFields).toEqual(['trustAnchors', 'requireKeyId']);
+        expect(parsed.brokenAt.detail).toContain(`give --distrusted-key ${K}@${FROM}.`);
+        expect(parsed.keyTrust.findings[0].detail).toContain(`give --distrusted-key ${K}@${FROM}.`);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
     it('pinned on F with K at the listed instant passes; at a later instant fails saying the entries disagree; at an earlier one passes with a note', () => {
       const same = run(`verify ${X} --trust-anchor ${F} --distrusted-key ${K}@${FROM} --json`);
       expect(same.exitCode).toBe(0);

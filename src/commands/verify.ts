@@ -30,19 +30,33 @@ const OPTION_FLAGS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bagentKeys\b/g, '--agent-keys'],
 ];
 
-/** One string from a result, its option names given as this command's flags. */
+/** One prose string from a result, its option names given as this command's flags. */
 export function flagWording(text: string): string {
   return OPTION_FLAGS.reduce((s, [pattern, flag]) => s.replace(pattern, flag), text);
 }
 
-/** A copy of a result with every string in it worded by {@link flagWording}. */
-function withFlagWording<T>(value: T): T {
-  if (typeof value === 'string') return flagWording(value) as T;
-  if (Array.isArray(value)) return value.map((v: unknown) => withFlagWording(v)) as T;
-  if (value !== null && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, withFlagWording(v)])) as T;
-  }
-  return value;
+/**
+ * A result with its prose worded by {@link flagWording}: `brokenAt.detail`,
+ * each entry's detail, and the key-trust detail and each finding, note and
+ * accounted-for detail. Ids, digests and instants are data and pass through.
+ */
+export function resultWithFlags(result: VerifyExportResult): VerifyExportResult {
+  const detail = <T extends { detail?: string }>(item: T): T =>
+    item.detail === undefined ? item : { ...item, detail: flagWording(item.detail) };
+  const prose = <T extends { detail: string }>(item: T): T => ({ ...item, detail: flagWording(item.detail) });
+  const trust = result.keyTrust;
+  return {
+    ...result,
+    ...(result.brokenAt ? { brokenAt: detail(result.brokenAt) } : {}),
+    entries: result.entries.map(detail),
+    keyTrust: {
+      ...trust,
+      detail: flagWording(trust.detail),
+      findings: trust.findings.map(prose),
+      notes: trust.notes.map(prose),
+      accounted: trust.accounted.map(prose),
+    },
+  };
 }
 
 /**
@@ -286,7 +300,7 @@ export default class Verify extends BaseCommand {
       throw err;
     }
     // Findings, notes and suggestions name the flags, in JSON and text alike.
-    result = withFlagWording(result);
+    result = resultWithFlags(result);
 
     if (this.isJson) {
       // verify-core's result, plus the verdict @agledger/verify reports:
