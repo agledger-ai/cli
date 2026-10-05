@@ -173,7 +173,7 @@ describe('agledger api: method + path validation', () => {
   });
 
   it('requires auth', () => {
-    const result = run('api GET /v1/records --json');
+    const result = run('api GET /v1/records --json --api-url http://127.0.0.1:45999');
     expect(result.exitCode).not.toBe(0);
     const parsed = parseJson(result);
     expect(parsed.code).toBe('AUTH_REQUIRED');
@@ -646,7 +646,7 @@ describe('exit codes', () => {
 
 describe('error output format', () => {
   it('auth error is valid JSON with code, message, suggestion', () => {
-    const result = run('api GET /v1/records --json');
+    const result = run('api GET /v1/records --json --api-url http://127.0.0.1:45999');
     const parsed = parseJson(result);
     expect(parsed.error).toBe(true);
     expect(parsed.code).toBe('AUTH_REQUIRED');
@@ -1204,6 +1204,15 @@ describe('--dry-run reports the real resolved URL', () => {
     expect(parseJson(real).code).toBe('CONFIG_ERROR');
   });
 
+  it('names the error the real call would raise when the URL is unusable', () => {
+    const dry = run('api GET /v1/records --dry-run --json', {
+      AGLEDGER_API_KEY: 'agl_adm_test',
+      AGLEDGER_API_URL: 'not-a-url',
+    });
+    expect(dry.exitCode).toBe(0);
+    expect(String(JSON.parse(dry.stdout).auth.apiUrlSource)).toContain('CONFIG_ERROR');
+  });
+
   it('echoes the configured URL when one IS supplied', () => {
     const result = run('api GET /v1/records --dry-run --json', {
       AGLEDGER_API_KEY: 'agl_adm_test',
@@ -1213,6 +1222,58 @@ describe('--dry-run reports the real resolved URL', () => {
     const parsed = JSON.parse(result.stdout);
     expect(parsed.auth.apiUrl).toBe('https://agledger.internal.example.com');
     expect(parsed.auth.apiUrlSource).toBeUndefined();
+  });
+});
+
+describe('the API URL is checked before the credential', () => {
+  it('with neither a URL nor a key, the missing URL is reported (exit 2 CONFIG_ERROR)', () => {
+    const result = run('api GET /v1/records --json');
+    expect(result.exitCode).toBe(2);
+    const parsed = parseJson(result);
+    expect(parsed.code).toBe('CONFIG_ERROR');
+    expect(String(parsed.message)).toContain('No API URL configured');
+  });
+
+  // "Invalid URL" used to surface at request time as UNKNOWN_ERROR, exit 1.
+  for (const [label, args, env] of [
+    ['--api-url', '--api-url not-a-url', {}],
+    ['AGLEDGER_API_URL', '', { AGLEDGER_API_URL: 'not-a-url' }],
+    ['--api-url without a scheme', '--api-url localhost:3100', {}],
+  ] as const) {
+    it(`a malformed URL from ${label} is CONFIG_ERROR, exit 2, with or without a key`, () => {
+      for (const key of ['', 'agl_adm_test']) {
+        const result = run(`api GET /v1/records --json ${args}`, { ...env, AGLEDGER_API_KEY: key });
+        expect(result.exitCode).toBe(2);
+        const parsed = parseJson(result);
+        expect(parsed.code).toBe('CONFIG_ERROR');
+        expect(String(parsed.message)).toContain(`API URL from ${label.split(' ')[0]!}`);
+      }
+    });
+  }
+
+  it("a malformed URL stored on a profile is CONFIG_ERROR, exit 2, naming the profile", () => {
+    const home = isolatedHome();
+    const configDir = join(home, '.agledger');
+    mkdirSync(configDir, { recursive: true, mode: 0o700 });
+    writeFileSync(
+      join(configDir, 'config.json'),
+      JSON.stringify({ profiles: { prod: { apiKey: 'agl_adm_k', apiUrl: 'not-a-url' } }, activeProfile: 'prod' }),
+      { flag: 'w', mode: 0o600 },
+    );
+    const result = run('api GET /health --json', { HOME: home });
+    expect(result.exitCode).toBe(2);
+    const parsed = parseJson(result);
+    expect(parsed.code).toBe('CONFIG_ERROR');
+    expect(String(parsed.message)).toContain("profile 'prod'");
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('login --oidc refuses a malformed URL before running the token source', () => {
+    const home = isolatedHome();
+    const result = run(`login --oidc --oidc-token-cmd 'exit 7' --api-url not-a-url --json`, { HOME: home });
+    expect(result.exitCode).toBe(2);
+    expect(parseJson(result).code).toBe('CONFIG_ERROR');
+    rmSync(home, { recursive: true, force: true });
   });
 });
 
