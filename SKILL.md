@@ -64,6 +64,6 @@ agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value | -f key
 - `agledger login --api-key <key> [--profile NAME]`: verifies key, stores in `~/.agledger/config.json` (0600). After login, plain `agledger api ...` calls authenticate from the stored profile (no flag/env needed).
 - `agledger login --oidc --oidc-token-cmd <command> | --oidc-token-file <path> [--oidc-agent-id ID] [--profile NAME]`: stores the source (never a token, cert or key). A command is verified first with one exchange; a file is only checked to hold a JWT, since exchanging it would spend the token until the file rotates.
 - `agledger config use <profile>`: set the active profile; `agledger api ... --profile NAME` uses a specific one per-invocation.
-- `agledger logout [--profile NAME | --all]`
+- `agledger logout [--profile NAME | --all]`: removes the active profile unless `--profile` names another; exits 2 `MISSING_INPUT` when there is no such profile
 - `agledger config list | get | use <profile> | path`
 - `agledger auth`: check login state and identity, including the OIDC cert (exit 0 when nothing is configured)

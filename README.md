@@ -184,7 +184,7 @@ agledger api GET /openapi.json          # Full API route catalog
 | `api` | Call any API endpoint |
 | `discover` | Health + identity + scopes + quickstart |
 | `login` | Verify an API key (or, with `--oidc`, an OIDC token source) and store it in `~/.agledger/config.json` (0600) |
-| `logout` | Remove profile(s) |
+| `logout` | Remove the active profile, the one named by `--profile`, or all of them with `--all`; exits 2 `MISSING_INPUT` when there is no such profile |
 | `auth` | Check current login state and show the identity, including the OIDC cert (exit 0 when nothing is configured) |
 | `config` | `list` / `get` / `use <profile>` / `path` |
 | `verify` | Offline audit export verification (COSE_Sign1, RFC 9052; Ed25519 or ES256; no network). `--trust-anchor sha256:<digest>` anchors the keys to one you pinned; see [Verifying an export offline](#verifying-an-export-offline) |

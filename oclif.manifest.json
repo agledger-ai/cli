@@ -652,7 +652,12 @@
     "logout": {
       "aliases": [],
       "args": {},
-      "description": "Remove a stored profile from ~/.agledger/config.json",
+      "description": "Remove a stored profile from ~/.agledger/config.json: the active profile, the one named by --profile, or every profile with --all. Exits 2 when there is no such profile to remove.",
+      "examples": [
+        "<%= config.bin %> logout",
+        "<%= config.bin %> logout --profile prod",
+        "<%= config.bin %> logout --all"
+      ],
       "flags": {
         "json": {
           "description": "Force JSON output (default when stdout is piped)",
@@ -683,9 +688,8 @@
           "type": "option"
         },
         "profile": {
-          "description": "Profile name to remove",
+          "description": "Profile name to remove (default: the active profile)",
           "name": "profile",
-          "default": "default",
           "hasDynamicHelp": false,
           "multiple": false,
           "type": "option"
