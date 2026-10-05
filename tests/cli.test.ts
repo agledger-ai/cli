@@ -13,7 +13,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { execSync } from 'node:child_process';
+import { execFile, execSync } from 'node:child_process';
+import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { generateKeyPairSync } from 'node:crypto';
 import { writeFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -502,20 +503,83 @@ describe('login + logout + config', () => {
 
     const result = run('logout --json', { HOME: home });
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({ loggedOut: true, profile: 'prod', activeProfile: 'default' });
+    expect(JSON.parse(result.stdout)).toMatchObject({ loggedOut: true, profile: 'prod', activeProfile: null });
     const final = JSON.parse(readFileSync(configPath, 'utf-8'));
     expect(final.profiles).not.toHaveProperty('prod');
     expect(final.profiles).toHaveProperty('default');
     rmSync(home, { recursive: true, force: true });
   });
 
-  it('logout --all on empty config returns empty removedProfiles', () => {
+  // Logging out the active profile used to make the first remaining one active,
+  // so an admin profile stored beside an agent one took over the next call.
+  it('logout of the active profile leaves none active and says so', () => {
+    const home = isolatedHome();
+    const configDir = join(home, '.agledger');
+    mkdirSync(configDir, { recursive: true, mode: 0o700 });
+    const configPath = join(configDir, 'config.json');
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        profiles: { adm: { apiKey: 'agl_adm_k', apiUrl: 'https://x.example' }, agt: { apiKey: 'agl_agt_k', apiUrl: 'https://x.example' } },
+        activeProfile: 'agt',
+      }),
+      { mode: 0o600 },
+    );
+    const result = run('logout --json', { HOME: home });
+    expect(result.exitCode).toBe(0);
+    const out = JSON.parse(result.stdout);
+    expect(out).toMatchObject({ loggedOut: true, profile: 'agt', activeProfile: null });
+    expect(out.note).toContain('config use');
+    expect(out.note).toContain('adm');
+    const final = JSON.parse(readFileSync(configPath, 'utf-8'));
+    expect(final.activeProfile).toBeUndefined();
+    expect(final.profiles).toHaveProperty('adm');
+
+    // A profile that was not active leaves the active one alone.
+    writeFileSync(configPath, JSON.stringify({ profiles: { adm: { apiKey: 'a' }, agt: { apiKey: 'b' } }, activeProfile: 'agt' }), { mode: 0o600 });
+    const other = JSON.parse(run('logout --profile adm --json', { HOME: home }).stdout);
+    expect(other).toMatchObject({ profile: 'adm', activeProfile: 'agt' });
+    expect(other.note).toBeUndefined();
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('logout --all with nothing stored exits 2 like a plain logout', () => {
     const home = isolatedHome();
     const result = run('logout --all --json', { HOME: home });
+    expect(result.exitCode).toBe(2);
+    expect(parseJson(result).code).toBe('MISSING_INPUT');
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('logout --all removes every profile and the active one', () => {
+    const home = isolatedHome();
+    const configDir = join(home, '.agledger');
+    mkdirSync(configDir, { recursive: true, mode: 0o700 });
+    const configPath = join(configDir, 'config.json');
+    writeFileSync(configPath, JSON.stringify({ profiles: { a: { apiKey: 'k' }, b: { apiKey: 'k' } }, activeProfile: 'a' }), { mode: 0o600 });
+    const result = run('logout --all --json', { HOME: home });
     expect(result.exitCode).toBe(0);
-    const parsed = JSON.parse(result.stdout);
-    expect(parsed.loggedOut).toBe(true);
-    expect(parsed.removedProfiles).toEqual([]);
+    expect(JSON.parse(result.stdout)).toMatchObject({ loggedOut: true, removedProfiles: ['a', 'b'] });
+    expect(JSON.parse(readFileSync(configPath, 'utf-8'))).toEqual({ profiles: {} });
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  // A --profile naming nothing was ignored whenever env or flag credentials
+  // were set, running the call as a credential the caller did not mean.
+  it('--profile naming no stored profile exits 3 even with env or flag credentials', () => {
+    const home = isolatedHome();
+    const env = { HOME: home, AGLEDGER_API_KEY: 'agl_agt_env', AGLEDGER_API_URL: 'http://127.0.0.1:9' };
+    for (const cmd of [
+      'api GET /v1/auth/me --profile nope --json',
+      'api GET /v1/auth/me --profile nope --api-key agl_agt_flag --api-url http://127.0.0.1:9 --json',
+      'api GET /v1/auth/me --profile nope --dry-run --json',
+    ]) {
+      const result = run(cmd, env);
+      expect(result.exitCode, cmd).toBe(3);
+      const parsed = parseJson(result);
+      expect(parsed.code).toBe('AUTH_REQUIRED');
+      expect(String(parsed.message)).toBe("Profile 'nope' not found.");
+    }
     rmSync(home, { recursive: true, force: true });
   });
 
@@ -1570,5 +1634,133 @@ describe('a refused OIDC cert exchange reaches the user', () => {
     } finally {
       server.close();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A write that outlives the client timeout
+// ---------------------------------------------------------------------------
+describe('agledger api: a timed-out write carries its Idempotency-Key', () => {
+  /** Async, so a server in this process can answer while the CLI runs. */
+  const runAsync = (args: string[], env: Record<string, string>) =>
+    new Promise<{ stdout: string; stderr: string; exitCode: number }>((done) => {
+      execFile(
+        'node',
+        [BIN, ...args],
+        { env: { ...process.env, AGLEDGER_API_KEY: 'agl_agt_t', HOME: tmpdir(), ...env }, timeout: SPAWN_TIMEOUT },
+        (err, stdout, stderr) => {
+          const code = (err as { code?: number } | null)?.code;
+          done({ stdout: stdout.trim(), stderr: stderr.trim(), exitCode: err ? (typeof code === 'number' ? code : 1) : 0 });
+        },
+      );
+    });
+
+  /** Holds the first POST past the CLI's timeout; answers a repeat of its key from the first. */
+  const startServer = async () => {
+    const seen = new Map<string, string>();
+    const keys: Array<string | undefined> = [];
+    const server: Server = createServer((req: IncomingMessage, res) => {
+      const key = req.headers['idempotency-key'] as string | undefined;
+      keys.push(key);
+      if (req.method === 'POST' && key) {
+        const existing = seen.get(key);
+        if (existing === undefined) {
+          seen.set(key, `rec-${seen.size + 1}`);
+          return; // hold: the client times out first
+        }
+        res.writeHead(201, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ id: existing }));
+        return;
+      }
+      // Held GETs too, to prove a read claims no key.
+      if (req.url === '/slow') return;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('{}');
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    return { server, url, keys, seen };
+  };
+
+  it('names the key on TIMEOUT, and rerunning with it replays instead of duplicating', async () => {
+    const { server, url, keys, seen } = await startServer();
+    try {
+      const env = { AGLEDGER_API_URL: url, AGLEDGER_REQUEST_TIMEOUT_MS: '400' };
+      const first = await runAsync(['api', 'POST', '/v1/records', '-F', 'type=x', '--json'], env);
+      expect(first.exitCode).toBe(10);
+      const err = JSON.parse(first.stderr.split('\n')[0]);
+      expect(err.code).toBe('TIMEOUT');
+      expect(err.idempotencyKey).toBe(keys[0]);
+      expect(err.suggestion).toContain(`--idempotency-key ${err.idempotencyKey}`);
+      expect(err.suggestion).not.toContain('Retry the same command.');
+
+      const second = await runAsync(
+        ['api', 'POST', '/v1/records', '-F', 'type=x', '--idempotency-key', err.idempotencyKey, '--json'],
+        env,
+      );
+      expect(second.exitCode).toBe(0);
+      expect(JSON.parse(second.stdout)).toEqual({ id: 'rec-1' });
+      expect(seen.size).toBe(1);
+    } finally {
+      server.close();
+    }
+  });
+
+  it('a timed-out GET claims no key', async () => {
+    const { server, url } = await startServer();
+    try {
+      const result = await runAsync(['api', 'GET', '/slow', '--json'], {
+        AGLEDGER_API_URL: url,
+        AGLEDGER_REQUEST_TIMEOUT_MS: '400',
+      });
+      expect(result.exitCode).toBe(10);
+      const err = JSON.parse(result.stderr.split('\n')[0]);
+      expect(err.code).toBe('TIMEOUT');
+      expect(err).not.toHaveProperty('idempotencyKey');
+      expect(err.suggestion).not.toContain('idempotency');
+    } finally {
+      server.close();
+    }
+  });
+
+  it('--verbose shows the key a POST is sent under, and none for a GET', async () => {
+    const { server, url } = await startServer();
+    try {
+      const env = { AGLEDGER_API_URL: url, AGLEDGER_REQUEST_TIMEOUT_MS: '400' };
+      const post = await runAsync(['api', 'POST', '/v1/records', '--verbose', '--idempotency-key', 'my-key', '--json'], env);
+      const lines = post.stderr.split('\n').map((l) => JSON.parse(l));
+      expect(lines.find((l) => l.event === 'request')).toMatchObject({ method: 'POST', idempotencyKey: 'my-key' });
+      const get = await runAsync(['api', 'GET', '/health', '--verbose', '--json'], env);
+      expect(get.stderr).not.toContain('idempotencyKey');
+    } finally {
+      server.close();
+    }
+  });
+
+  it('a connection dropped after the request went out carries the key too', async () => {
+    const server = createServer((req) => req.socket.destroy());
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    try {
+      const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+      const result = await runAsync(['api', 'POST', '/v1/records', '--json'], { AGLEDGER_API_URL: url });
+      expect(result.exitCode).toBe(9);
+      const err = JSON.parse(result.stderr.split('\n')[0]);
+      expect(err.code).toBe('NETWORK_ERROR');
+      expect(err.suggestion).toContain(`--idempotency-key ${err.idempotencyKey}`);
+    } finally {
+      server.close();
+    }
+  });
+
+  it('a refused connection never sent anything, so it names no key', async () => {
+    // A port that was just listening and is not now. (Port 9 is on fetch's blocked list, which fails differently.)
+    const probe = createServer();
+    await new Promise<void>((r) => probe.listen(0, '127.0.0.1', r));
+    const port = (probe.address() as { port: number }).port;
+    await new Promise((r) => probe.close(r));
+    const result = await runAsync(['api', 'POST', '/v1/records', '--json'], { AGLEDGER_API_URL: `http://127.0.0.1:${port}` });
+    const err = JSON.parse(result.stderr.split('\n')[0]);
+    expect(err.code).toBe('NETWORK_ERROR');
+    expect(err).not.toHaveProperty('idempotencyKey');
   });
 });
