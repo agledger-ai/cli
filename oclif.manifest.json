@@ -796,7 +796,7 @@
           "type": "option"
         },
         "distrusted-key": {
-          "description": "sha256:<64 hex>, optionally @<RFC 3339 instant>: a key the operator distrusts, as in the Server's VAULT_DISTRUSTED_KEYS. What it signed from that instant (with none, from its retirement) counts for nothing in the walk. Requires --trust-anchor. A dated entry may name a key also given to --trust-anchor, which then vouches for what it signed before the instant. Repeatable.",
+          "description": "sha256:<64 hex>, optionally @<RFC 3339 instant>: a key the operator distrusts, as in the Server's VAULT_DISTRUSTED_KEYS. What it signed from that instant (with none, from its retirement) counts for nothing in the walk. Requires --trust-anchor. A dated entry may name a key also given to --trust-anchor, which then vouches for what it signed before the instant. Where an export lists a key retired at the instant the Server distrusts it from (distrustedFrom), earlier than its signed retirement, a run without the same entry fails on that window, and the finding names the --distrusted-key to confirm with the Server's operator. Repeatable.",
           "name": "distrusted-key",
           "hasDynamicHelp": false,
           "multiple": true,
