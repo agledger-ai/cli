@@ -13,6 +13,39 @@ import {
 import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
 
 /**
+ * verify-core words a finding, note or failure for a library caller, so its
+ * advice names options (`give distrustedKeys sha256:<hex>@<instant>`, `pin
+ * sha256:<hex> in trustAnchors`). Here they are flags, so the report names the flag, in the
+ * words `@agledger/verify` prints; verify-core's own result is left as it is.
+ */
+const OPTION_FLAGS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\badd (sha256:[0-9a-f]{64}) to distrustedKeys\b/g, 'add --distrusted-key $1'],
+  [/\bis in distrustedKeys\b/g, 'is given as a --distrusted-key'],
+  [/\bin trustAnchors\b/g, 'with --trust-anchor'],
+  [/\bNo trustAnchors were given\b/g, 'No --trust-anchor was given'],
+  [/\bdistrustedKeys\b/g, '--distrusted-key'],
+  [/\btrustAnchors\b/g, '--trust-anchor'],
+  [/\brequireSuppliedKeys\b/g, '--require-supplied-keys'],
+  [/\brequireKeyId\b/g, '--require-key-id'],
+  [/\bagentKeys\b/g, '--agent-keys'],
+];
+
+/** One string from a result, its option names given as this command's flags. */
+export function flagWording(text: string): string {
+  return OPTION_FLAGS.reduce((s, [pattern, flag]) => s.replace(pattern, flag), text);
+}
+
+/** A copy of a result with every string in it worded by {@link flagWording}. */
+function withFlagWording<T>(value: T): T {
+  if (typeof value === 'string') return flagWording(value) as T;
+  if (Array.isArray(value)) return value.map((v: unknown) => withFlagWording(v)) as T;
+  if (value !== null && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, withFlagWording(v)])) as T;
+  }
+  return value;
+}
+
+/**
  * Offline verification of a record audit export (format 2.0, COSE_Sign1).
  * Runs entirely offline: no network calls, no API key required. The
  * verification core is `@agledger/verify-core` (one dep, no network), shared
@@ -74,7 +107,10 @@ export default class Verify extends BaseCommand {
         'sha256:<64 hex>, optionally @<RFC 3339 instant>: a key the operator distrusts, as in the ' +
         'Server\'s VAULT_DISTRUSTED_KEYS. What it signed from that instant (with none, from its ' +
         'retirement) counts for nothing in the walk. Requires --trust-anchor. A dated entry may name a ' +
-        'key also given to --trust-anchor, which then vouches for what it signed before the instant. Repeatable.',
+        'key also given to --trust-anchor, which then vouches for what it signed before the instant. Where an ' +
+        'export lists a key retired at the instant the Server distrusts it from (distrustedFrom), earlier than ' +
+        'its signed retirement, a run without the same entry fails on that window, and the finding names the ' +
+        '--distrusted-key to confirm with the Server\'s operator. Repeatable.',
     }),
     'agent-keys': Flags.string({
       description:
@@ -249,10 +285,12 @@ export default class Verify extends BaseCommand {
       }
       throw err;
     }
+    // Findings, notes and suggestions name the flags, in JSON and text alike.
+    result = withFlagWording(result);
 
     if (this.isJson) {
-      // verify-core's result verbatim, plus the verdict @agledger/verify
-      // reports: `valid` alone is true on a run that anchored nothing.
+      // verify-core's result, plus the verdict @agledger/verify reports:
+      // `valid` alone is true on a run that anchored nothing.
       const { verdict, ...rest } = result;
       this.output({ verdict, ...rest });
     } else {

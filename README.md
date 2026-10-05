@@ -140,7 +140,18 @@ signed. A dated `--distrusted-key` may name a key also given to
 `--trust-anchor`, as the Server's key-compromise runbook does: the pin then
 vouches for what the key signed before the instant. An export accounts for
 nothing a distrusted key signed; such entries fail here, and only a full dump
-verified with `@agledger/verify` lists them as accounted for. `--keys <file>` supplies
+verified with `@agledger/verify` lists them as accounted for. An API 2.0
+export lists a key the Server's `VAULT_DISTRUSTED_KEYS` names with
+`distrustedFrom`, the entry's instant, and where that instant is earlier than
+the retirement the key's closures sign, lists the key retired at it. A run
+not given the same entry still fails `CHAIN_KEY_WINDOW_DRIFT` on that window
+(`KEY_CLOSURE_INVALID` where no closure retires the key), but the finding names
+the entry, as `--distrusted-key sha256:<digest>@<distrustedFrom>`, and says so
+when the entry you gave carries another instant; one at an earlier instant
+draws no finding on the window and is a `Key note:`, though entries the key
+signed after that instant still fail. The listing is the Server's unsigned word, so confirm the instant
+with its operator before passing that entry. Findings and notes name the flags
+in human and `--json` output alike. `--keys <file>` supplies
 keys (a saved `GET /v1/verification-keys` response works as is, and its
 statements are walked too), `--require-supplied-keys` refuses the export's
 embedded keys, and `--agent-keys <file>` re-verifies the agent signatures an
