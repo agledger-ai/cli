@@ -1685,7 +1685,7 @@ describe('agledger api: a timed-out write carries its Idempotency-Key', () => {
   it('names the key on TIMEOUT, and rerunning with it replays instead of duplicating', async () => {
     const { server, url, keys, seen } = await startServer();
     try {
-      const env = { AGLEDGER_API_URL: url, AGLEDGER_REQUEST_TIMEOUT_MS: '400' };
+      const env = { AGLEDGER_API_URL: url, AGLEDGER_TIMEOUT: '0.4' };
       const first = await runAsync(['api', 'POST', '/v1/records', '-F', 'type=x', '--json'], env);
       expect(first.exitCode).toBe(10);
       const err = JSON.parse(first.stderr.split('\n')[0]);
@@ -1693,6 +1693,7 @@ describe('agledger api: a timed-out write carries its Idempotency-Key', () => {
       expect(err.idempotencyKey).toBe(keys[0]);
       expect(err.suggestion).toContain(`--idempotency-key ${err.idempotencyKey}`);
       expect(err.suggestion).not.toContain('Retry the same command.');
+      expect(err.suggestion).toContain('AGLEDGER_TIMEOUT');
 
       const second = await runAsync(
         ['api', 'POST', '/v1/records', '-F', 'type=x', '--idempotency-key', err.idempotencyKey, '--json'],
@@ -1706,12 +1707,22 @@ describe('agledger api: a timed-out write carries its Idempotency-Key', () => {
     }
   });
 
+  it('AGLEDGER_TIMEOUT must be a positive number of seconds, or the call exits 2 CONFIG_ERROR', async () => {
+    for (const bad of ['0', '-5', 'abc', '', '2147484']) {
+      const result = await runAsync(['api', 'GET', '/health', '--json'], { AGLEDGER_API_URL: 'http://127.0.0.1:1', AGLEDGER_TIMEOUT: bad });
+      expect(result.exitCode, bad).toBe(2);
+      const err = JSON.parse(result.stderr.split('\n')[0]);
+      expect(err.code).toBe('CONFIG_ERROR');
+      expect(err.message).toContain('AGLEDGER_TIMEOUT');
+    }
+  });
+
   it('a timed-out GET claims no key', async () => {
     const { server, url } = await startServer();
     try {
       const result = await runAsync(['api', 'GET', '/slow', '--json'], {
         AGLEDGER_API_URL: url,
-        AGLEDGER_REQUEST_TIMEOUT_MS: '400',
+        AGLEDGER_TIMEOUT: '0.4',
       });
       expect(result.exitCode).toBe(10);
       const err = JSON.parse(result.stderr.split('\n')[0]);
@@ -1726,7 +1737,7 @@ describe('agledger api: a timed-out write carries its Idempotency-Key', () => {
   it('--verbose shows the key a POST is sent under, and none for a GET', async () => {
     const { server, url } = await startServer();
     try {
-      const env = { AGLEDGER_API_URL: url, AGLEDGER_REQUEST_TIMEOUT_MS: '400' };
+      const env = { AGLEDGER_API_URL: url, AGLEDGER_TIMEOUT: '0.4' };
       const post = await runAsync(['api', 'POST', '/v1/records', '--verbose', '--idempotency-key', 'my-key', '--json'], env);
       const lines = post.stderr.split('\n').map((l) => JSON.parse(l));
       expect(lines.find((l) => l.event === 'request')).toMatchObject({ method: 'POST', idempotencyKey: 'my-key' });

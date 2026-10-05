@@ -156,13 +156,15 @@ function apiUrlOrigin(fromFlagOrEnv: boolean, profileName: string | undefined): 
   return argvHasFlag('--api-url') ? '--api-url' : 'AGLEDGER_API_URL';
 }
 
-/**
- * The request timeout override. Undocumented seam for tests, which cannot wait
- * out the 30 s default: unset, malformed or non-positive means the client's own.
- */
-function requestTimeoutMs(): number | undefined {
-  const raw = Number(process.env.AGLEDGER_REQUEST_TIMEOUT_MS);
-  return Number.isFinite(raw) && raw > 0 ? raw : undefined;
+/** The longest delay setTimeout takes; a larger one fires at once, which would time every call out. */
+const MAX_TIMEOUT_SECONDS = 2_147_483;
+
+/** Why `AGLEDGER_TIMEOUT` cannot be used, or undefined when it can. */
+function timeoutProblem(raw: string): string | undefined {
+  const seconds = raw.trim() === '' ? NaN : Number(raw);
+  if (!Number.isFinite(seconds) || seconds <= 0) return 'is not a positive number of seconds';
+  if (seconds > MAX_TIMEOUT_SECONDS) return `is more than ${MAX_TIMEOUT_SECONDS} seconds`;
+  return undefined;
 }
 
 /** The advice for a write whose outcome is unknown: replay it under the key it carried. */
@@ -311,7 +313,20 @@ export abstract class BaseCommand extends Command {
     }
 
     this.lastApiUrl = apiUrl;
-    const timeoutMs = requestTimeoutMs();
+    const timeoutRaw = process.env.AGLEDGER_TIMEOUT;
+    let timeoutMs: number | undefined;
+    if (timeoutRaw !== undefined) {
+      const problem = timeoutProblem(timeoutRaw);
+      if (problem) {
+        this.failWith(
+          ErrorCode.CONFIG_ERROR,
+          `The timeout from AGLEDGER_TIMEOUT (${JSON.stringify(timeoutRaw)}) ${problem}.`,
+          ExitCode.USAGE_ERROR,
+          'Give the seconds to wait for each API response, for example AGLEDGER_TIMEOUT=60.',
+        );
+      }
+      timeoutMs = Math.round(Number(timeoutRaw) * 1000);
+    }
     const onBehalfOfSource = envOnBehalfOfSource();
     this.verboseLog(flags, {
       event: 'auth',
@@ -609,8 +624,8 @@ export abstract class BaseCommand extends Command {
         'Request timed out.',
         ExitCode.TIMEOUT,
         key
-          ? `The Server may have processed the request before the timeout. ${retryWithKey(key)}`
-          : 'Retry the same command. If it persists, run `agledger discover` to check API connectivity.',
+          ? `The Server may have processed the request before the timeout. ${retryWithKey(key)} If the instance is simply slow, raise the wait with AGLEDGER_TIMEOUT=<seconds> (default 30).`
+          : 'Retry the same command. If the instance is slow, raise the wait with AGLEDGER_TIMEOUT=<seconds> (default 30). If it persists, run `agledger discover` to check API connectivity.',
         key ? { idempotencyKey: key } : undefined,
       );
     }
