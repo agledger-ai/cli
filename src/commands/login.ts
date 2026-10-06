@@ -24,6 +24,9 @@ export default class Login extends BaseCommand {
     '<%= config.bin %> login --oidc --api-url https://agledger.internal --oidc-token-file /var/run/secrets/tokens/agledger',
   ];
 
+  // --profile names the profile this login writes, so it need not exist yet.
+  protected override readonly createsProfile = true;
+
   static override flags = {
     ...BaseCommand.baseFlags,
     profile: Flags.string({ description: 'Profile name', default: 'default' }),

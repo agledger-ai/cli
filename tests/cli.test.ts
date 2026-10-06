@@ -440,6 +440,51 @@ describe('login + logout + config', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
+  it('login stores a key under a profile that does not exist yet, named or default', async () => {
+    const { promisify } = await import('node:util');
+    const server = createServer((req, res) => {
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ role: 'agent', authorization: req.headers.authorization }));
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const apiUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const home = isolatedHome();
+    const env = {
+      ...process.env,
+      AGLEDGER_API_KEY: '',
+      AGLEDGER_API_URL: '',
+      AGLEDGER_OIDC_TOKEN_CMD: '',
+      AGLEDGER_OIDC_TOKEN_FILE: '',
+      HOME: home,
+    };
+    try {
+      for (const [args, profile] of [
+        [['--profile', 'prod'], 'prod'],
+        [[], 'default'],
+      ] as const) {
+        const { stdout } = await promisify(execFile)(
+          'node',
+          [BIN, 'login', '--api-url', apiUrl, '--api-key', `agl_agt_${profile}`, ...args, '--json'],
+          { env },
+        );
+        expect(JSON.parse(stdout)).toMatchObject({
+          authenticated: true,
+          profile,
+          account: { authorization: `Bearer agl_agt_${profile}` },
+        });
+      }
+      const config = JSON.parse(readFileSync(join(home, '.agledger', 'config.json'), 'utf-8'));
+      expect(config.activeProfile).toBe('default');
+      expect(config.profiles.prod).toEqual({ apiKey: 'agl_agt_prod', apiUrl });
+      // Any other command still refuses a --profile that names nothing.
+      const result = run(`api GET /v1/records --profile nope --api-url ${apiUrl} --json`, { HOME: home });
+      expect(result.exitCode).toBe(3);
+    } finally {
+      server.close();
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it('config list on empty config returns empty profiles', () => {
     const home = isolatedHome();
     const result = run('config list --json', { HOME: home });
