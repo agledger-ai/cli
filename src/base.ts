@@ -184,6 +184,9 @@ export abstract class BaseCommand extends Command {
   private lastApiUrl?: string;
   /** The client `callApi` built for this invocation, reused by every later call. */
   private client?: ApiClient;
+  /** True on a command whose --profile names the profile it is about to write
+   *  (`login`), so a profile that does not exist yet is not an error there. */
+  protected readonly createsProfile: boolean = false;
   /** The Idempotency-Key the most recent POST went out under, so a timeout or a
    *  dropped connection can hand it back for the retry. Undefined for any other
    *  method: the API ignores the header there, so there is no key to claim. */
@@ -350,7 +353,7 @@ export abstract class BaseCommand extends Command {
 
   /** Exit 3 when `--profile` names a profile that is not stored. */
   protected requireNamedProfile(flags: { profile?: string }, profile: Profile | undefined): void {
-    if (flags.profile && !profile) {
+    if (flags.profile && !profile && !this.createsProfile) {
       this.failWith(
         ErrorCode.AUTH_REQUIRED,
         `Profile '${flags.profile}' not found.`,
