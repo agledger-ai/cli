@@ -2,6 +2,8 @@
 
 The official CLI for the [AGLedger](https://agledger.ai) API: change control for AI agents. Agent memory, approvals, audit trail, and notifications: one API, one signed ledger, self-hosted.
 
+Requires an AGLedger Server 2.0 or later. For a 1.x Server, use `npm i -g @agledger/cli@1.5.0`, the last release that supports it.
+
 A **thin cover** over the API. The CLI passes your request straight through to the API and forwards the response: no hand-coded per-endpoint wrappers, no flag-to-body translation, no drift. Every AGLedger API route is reachable via `agledger api <METHOD> <path>`.
 
 **Learn more**
