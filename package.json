@@ -1,7 +1,7 @@
 {
   "name": "@agledger/cli",
-  "version": "2.0.0",
-  "description": "AGLedger CLI: developer and agent interface for AGLedger",
+  "version": "2.1.0",
+  "description": "AGLedger CLI: the AGLedger API from the command line, for developers and agents. Self-hosted, signed, hash-chained.",
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "bin": {
@@ -31,7 +31,7 @@
     "prepublishOnly": "npm run build && npm run lint:pkg"
   },
   "dependencies": {
-    "@agledger/verify-core": "^2.0.0",
+    "@agledger/verify-core": "^2.1.0",
     "@oclif/core": "^5.0.0"
   },
   "devDependencies": {

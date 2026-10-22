@@ -96,7 +96,7 @@ agledger api POST /v1/records -F type=notarize-generic-v1 -F criteria.summary=x 
 Reach for `-f` rather than quoting. Shell quotes that survive into the value
 (`-F externalTaskId='"4821"'`) reach the Server as a string with the quote
 characters inside it, and the Server accepts that: the Record is notarized,
-signed and immutable, with an identifier no other system will match.
+signed and tamper-evident, with an identifier no other system will match.
 
 ## Verifying an export offline
 
@@ -156,9 +156,13 @@ with its operator before passing that entry. Findings and notes name the flags
 in human and `--json` output alike. `--keys <file>` supplies
 keys (a saved `GET /v1/verification-keys` response works as is, and its
 statements are walked too), `--require-supplied-keys` refuses the export's
-embedded keys, and `--agent-keys <file>` re-verifies the agent signatures an
-OIDC cert sealed on the chain. `--trust-anchor` and `--distrusted-key` are
-given once per key. A malformed value, a distrusted key named twice,
+embedded keys, `--agent-keys <file>` re-verifies the agent signatures an
+OIDC cert sealed on the chain, and `--federation-key <hubId>=<key>` re-verifies
+the messages a federated peer signed and this Server sealed on its
+`FEDERATION_*` entries (`payload.wire`), under the peer's federation key as its
+operator gives it; a sealed message that does not hold fails
+`CHAIN_FEDERATION_WIRE_INVALID`. `--trust-anchor`, `--distrusted-key` and
+`--federation-key` are given once per key. A malformed value, a distrusted key named twice,
 `--distrusted-key` without `--trust-anchor`, a pinned key distrusted with no
 instant (the Server refuses to start with that pair), and a
 file that does not exist are each a usage error (exit 2), refused before the
