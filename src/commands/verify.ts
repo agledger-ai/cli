@@ -5,6 +5,7 @@ import {
   parseDistrustedKeys,
   parseTrustAnchors,
   verifyAuditExport,
+  normalizeFederationKey,
   type AgentPublicKeyJwk,
   type SuppliedKeyEntry,
   type VerifyExportResult,
@@ -28,6 +29,7 @@ const OPTION_FLAGS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\brequireSuppliedKeys\b/g, '--require-supplied-keys'],
   [/\brequireKeyId\b/g, '--require-key-id'],
   [/\bagentKeys\b/g, '--agent-keys'],
+  [/\bfederationKeys\b/g, '--federation-key'],
 ];
 
 /** One prose string from a result, its option names given as this command's flags. */
@@ -75,6 +77,7 @@ export default class Verify extends BaseCommand {
     '<%= config.bin %> verify audit-export.json',
     '<%= config.bin %> verify audit-export.json --keys vault-keys.json',
     '<%= config.bin %> verify audit-export.json --agent-keys agent-jwks.json',
+    '<%= config.bin %> verify audit-export.json --federation-key hub-b=MCowBQYDK2VwAyEA...',
     '<%= config.bin %> verify audit-export.json --json',
     'cat audit-export.json | <%= config.bin %> verify -',
   ];
@@ -83,7 +86,7 @@ export default class Verify extends BaseCommand {
   // missing-arg error tells the caller to put arguments before every
   // repeatable flag, which is not true of non-greedy ones, and lists hidden
   // flags with them.
-  static override usage = 'verify FILE [--trust-anchor <value>...] [--distrusted-key <value>...] [--keys <value>] [--agent-keys <value>] [--require-key-id <value>] [--require-supplied-keys] [--json] [--quiet]';
+  static override usage = 'verify FILE [--trust-anchor <value>...] [--distrusted-key <value>...] [--keys <value>] [--agent-keys <value>] [--federation-key <value>...] [--require-key-id <value>] [--require-supplied-keys] [--json] [--quiet]';
 
   static override args = {
     file: Args.string({
@@ -133,6 +136,17 @@ export default class Verify extends BaseCommand {
         '(also the cnf.jwk claim in its certJws). An entry whose sealed agent signature names one ' +
         'of them by thumbprint has that signature re-verified offline, and fails ' +
         'CHAIN_AGENT_SIGNATURE_INVALID if it does not verify.',
+    }),
+    'federation-key': Flags.string({
+      multiple: true,
+      multipleNonGreedy: true,
+      description:
+        '<hubId>=<key>: a peer Server\'s Ed25519 federation key as its operator gives it (base64 SPKI DER, ' +
+        'or base64 of the raw 32 bytes the handshake registered). A receiving Server seals each peer message ' +
+        'it accepts on the chain entry it writes (payload.wire), as the peer signed it. Every sealed message is ' +
+        'held to its body hash and to its entry; one from a hub given here also has its signature re-verified ' +
+        'under that key, which proves what the peer asserted from this export alone. A failure is ' +
+        'CHAIN_FEDERATION_WIRE_INVALID. Repeatable, once per peer.',
     }),
     'require-key-id': Flags.string({
       description:
@@ -245,6 +259,8 @@ export default class Verify extends BaseCommand {
         )
       : undefined;
 
+    const federationKeys = this.parseFederationKeys(flags['federation-key'] ?? []);
+
     const exportData = this.readJsonSource(
       args.file,
       'audit export',
@@ -285,6 +301,7 @@ export default class Verify extends BaseCommand {
         requireSuppliedKeys: flags['require-supplied-keys'],
         ...(trustAnchors.length > 0 ? { trustAnchors, distrustedKeys } : {}),
         agentKeys,
+        federationKeys,
       });
     } catch (err) {
       if (err instanceof TypeError) {
@@ -308,7 +325,7 @@ export default class Verify extends BaseCommand {
       const { verdict, ...rest } = result;
       this.output({ verdict, ...rest });
     } else {
-      this.renderHuman(result, agentKeys !== undefined);
+      this.renderHuman(result, agentKeys !== undefined, federationKeys !== undefined);
     }
 
     if (!result.valid) this.exit(ExitCode.GENERAL_ERROR);
@@ -339,6 +356,33 @@ export default class Verify extends BaseCommand {
    * entry that wraps its key as `{ publicKeyJwk: {...} }` (how an agent records
    * the key it sent at cert exchange) is unwrapped. verify-core validates each.
    */
+  /**
+   * `--federation-key` values into the `{ [hubId]: key }` map verify-core
+   * takes, each checked here so a bad key is a usage error, not a verdict.
+   */
+  private parseFederationKeys(values: readonly string[]): Record<string, string> | undefined {
+    if (values.length === 0) return undefined;
+    const out: Record<string, string> = {};
+    const shape =
+      'Each --federation-key is <hubId>=<key>: the peer\'s hub id, then its Ed25519 federation key as base64 SPKI DER or base64 of the raw 32 bytes, as its operator gives it.';
+    for (const value of values) {
+      const at = value.indexOf('=');
+      const hubId = at === -1 ? '' : value.slice(0, at).trim();
+      const key = at === -1 ? '' : value.slice(at + 1).trim();
+      if (hubId === '' || key === '') {
+        this.failWith(ErrorCode.INVALID_FIELD, `Invalid --federation-key ${JSON.stringify(value)}.`, ExitCode.USAGE_ERROR, shape);
+      }
+      if (normalizeFederationKey(key) === null) {
+        this.failWith(ErrorCode.INVALID_FIELD, `Invalid --federation-key for hub ${hubId}: the key is not an Ed25519 public key.`, ExitCode.USAGE_ERROR, shape);
+      }
+      if (hubId in out) {
+        this.failWith(ErrorCode.INVALID_FIELD, `--federation-key names hub ${hubId} twice.`, ExitCode.USAGE_ERROR, 'Give each peer one key.');
+      }
+      out[hubId] = key;
+    }
+    return out;
+  }
+
   private unwrapAgentKeys(raw: unknown): AgentPublicKeyJwk[] {
     const list: unknown[] = Array.isArray(raw)
       ? raw
@@ -352,7 +396,7 @@ export default class Verify extends BaseCommand {
     );
   }
 
-  private renderHuman(result: VerifyExportResult, agentKeysGiven: boolean): void {
+  private renderHuman(result: VerifyExportResult, agentKeysGiven: boolean, federationKeysGiven: boolean): void {
     if (this.isQuiet) return;
 
     const out = process.stdout;
@@ -410,6 +454,19 @@ export default class Verify extends BaseCommand {
     // Agent signatures are checked only against keys the caller supplies, so
     // the lines below say exactly how many were, and the PASS line speaks for
     // the Server's signatures alone.
+    const wire = result.federationWire;
+    if (wire.present > 0 && wire.present === wire.verified) {
+      out.write(`       Peer messages: ${wire.verified}/${wire.present} sealed federation messages re-verified under --federation-key.\n`);
+    } else if (wire.present > 0 && federationKeysGiven) {
+      out.write(
+        `       Peer messages: ${wire.verified}/${wire.present} re-verified; ${wire.present - wire.verified} come from a hub with no --federation-key and were hashed and matched to their entry only.\n`,
+      );
+    } else if (wire.present > 0) {
+      out.write(
+        `       Peer messages: ${wire.present} sealed on the chain, hashed and matched to their entry; the peer signatures were not checked. Pass --federation-key <hubId>=<key> for each peer to re-verify them.\n`,
+      );
+    }
+
     const { present, verified } = result.agentSignatures;
     const unchecked = present - verified;
     if (present > 0 && unchecked === 0) {

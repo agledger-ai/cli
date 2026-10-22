@@ -736,6 +736,7 @@
         "<%= config.bin %> verify audit-export.json",
         "<%= config.bin %> verify audit-export.json --keys vault-keys.json",
         "<%= config.bin %> verify audit-export.json --agent-keys agent-jwks.json",
+        "<%= config.bin %> verify audit-export.json --federation-key hub-b=MCowBQYDK2VwAyEA...",
         "<%= config.bin %> verify audit-export.json --json",
         "cat audit-export.json | <%= config.bin %> verify -"
       ],
@@ -809,6 +810,13 @@
           "multiple": false,
           "type": "option"
         },
+        "federation-key": {
+          "description": "<hubId>=<key>: a peer Server's Ed25519 federation key as its operator gives it (base64 SPKI DER, or base64 of the raw 32 bytes the handshake registered). A receiving Server seals each peer message it accepts on the chain entry it writes (payload.wire), as the peer signed it. Every sealed message is held to its body hash and to its entry; one from a hub given here also has its signature re-verified under that key, which proves what the peer asserted from this export alone. A failure is CHAIN_FEDERATION_WIRE_INVALID. Repeatable, once per peer.",
+          "name": "federation-key",
+          "hasDynamicHelp": false,
+          "multiple": true,
+          "type": "option"
+        },
         "require-key-id": {
           "description": "Require every entry to reference this keyId. Rejects otherwise-valid exports signed by a retired or unexpected key.",
           "name": "require-key-id",
@@ -843,7 +851,7 @@
       "pluginName": "@agledger/cli",
       "pluginType": "core",
       "strict": true,
-      "usage": "verify FILE [--trust-anchor <value>...] [--distrusted-key <value>...] [--keys <value>] [--agent-keys <value>] [--require-key-id <value>] [--require-supplied-keys] [--json] [--quiet]",
+      "usage": "verify FILE [--trust-anchor <value>...] [--distrusted-key <value>...] [--keys <value>] [--agent-keys <value>] [--federation-key <value>...] [--require-key-id <value>] [--require-supplied-keys] [--json] [--quiet]",
       "enableJsonFlag": false,
       "isESM": true,
       "relativePath": [
@@ -853,5 +861,5 @@
       ]
     }
   },
-  "version": "2.0.0"
+  "version": "2.1.0"
 }

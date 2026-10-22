@@ -367,6 +367,45 @@ describe('agledger api: --dry-run + --quiet', () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('');
   });
+
+  // README, SKILL.md and --help all promise "exit code only". The error body
+  // used to go to stderr anyway: 1301 bytes on a 404, 463 on a bad path, 138
+  // on a usage error, while a caller who asked for quiet reads the code.
+  it('--quiet keeps a usage error off stderr and keeps its exit code', () => {
+    const result = run('api --quiet', { AGLEDGER_API_KEY: 'agl_adm_test', AGLEDGER_API_URL: 'http://127.0.0.1:9' });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe('');
+  });
+
+  it('--quiet keeps a CLI-origin error off stderr and keeps its exit code', () => {
+    // No URL at all: a CONFIG_ERROR usage failure (exit 2) with a body the
+    // caller asked not to see.
+    const result = run('api GET /v1/records --quiet', { AGLEDGER_API_KEY: 'agl_adm_test' });
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe('');
+  });
+
+  it('--quiet keeps an unknown-flag refusal off stderr', () => {
+    const result = run('api GET /v1/records --no-such-flag --quiet', {
+      AGLEDGER_API_KEY: 'agl_adm_test',
+      AGLEDGER_API_URL: 'http://127.0.0.1:9',
+    });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe('');
+  });
+
+  it('--quiet keeps a network error off stderr and keeps exit 9', () => {
+    const result = run('api GET /v1/records --quiet', {
+      AGLEDGER_API_KEY: 'agl_adm_test',
+      AGLEDGER_API_URL: 'http://127.0.0.1:9',
+    });
+    expect(result.exitCode).toBe(9);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe('');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -924,6 +963,25 @@ describe('verify command', () => {
   // under a cert with signed bodies, and the cert's public key as the agent
   // kept it.
   const LIVE = resolve(import.meta.dirname, '../testdata/live-2.0.0');
+
+  it('--federation-key is checked before anything is verified', () => {
+    const bad = run(`verify ${VECTORS}/valid.json --federation-key hub-b=not-a-key --json`);
+    expect(bad.exitCode).toBe(2);
+    expect(parseJson(bad).code).toBe('INVALID_FIELD');
+    expect(parseJson(bad).message).toContain('hub-b');
+    const shapeless = run(`verify ${VECTORS}/valid.json --federation-key hub-b --json`);
+    expect(shapeless.exitCode).toBe(2);
+    expect(parseJson(shapeless).suggestion).toContain('<hubId>=<key>');
+  });
+
+  it('an export with no sealed peer message reports federationWire as absent, with or without a key', () => {
+    const key = 'MCowBQYDK2VwAyEA' + 'A'.repeat(43) + '=';
+    const result = run(`verify ${VECTORS}/valid.json --federation-key hub-b=${key} --json`);
+    expect(result.exitCode).toBe(0);
+    const out = JSON.parse(result.stdout);
+    expect(out.federationWire).toEqual({ present: 0, verified: 0 });
+    expect(out.optionalChecks.federation_wire).toBe('skipped_no_input');
+  });
 
   it('counts sealed agent signatures but checks none without --agent-keys', () => {
     const result = run(`verify ${LIVE}/export-cert-lifecycle.json --json`);

@@ -4,7 +4,15 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.1.0] - 2026-10-22
+
+### Added
+
+- **`--federation-key <hubId>=<key>` on `verify`:** a receiving Server's `FEDERATION_*` entries seal each peer message as the peer signed it (`payload.wire`); every sealed message is held to its body hash and to its entry, and one from a hub whose federation key is given is also re-verified under it. A bad value is a usage error before the export is read; a sealed message that does not hold fails `CHAIN_FEDERATION_WIRE_INVALID`. Needs `@agledger/verify-core` 2.1.0.
+
+### Fixed
+
+- **`--quiet` is exit code only, as the README, SKILL.md and `--help` have always said.** The error body still went to stderr: 1301 bytes on a 404, 463 on a bad path, 138 on a usage error. Under `--quiet` nothing is written on any failure, the CLI's own refusals and oclif's flag errors included; the exit code carries the outcome.
 
 ### Changed
 
@@ -40,13 +48,13 @@ Targets API 2.0 only. The major version follows the API's. 1.6.0 was never publi
 - `agledger verify` walks an export's key statements in write order (`createdAt`, then `id`), which every API 2.0 export carries, so the key-anchoring findings name the statement row, and a trusted key's later admissions date its window as the Server's do. The write times decide only the order: they are not signed, so a key statement signed by a key in `distrustedKeys` counts for nothing whatever time it carries. A statement that counts for nothing only because its signer is distrusted, dated before the cutoff by the export's own unsigned write time, is a `keyTrust.notes` entry rather than a finding, so an honest rotation away from a key distrusted after it still passes pinned on its successor. The human output lists each note as `Key note:`.
 - **Error bodies are read through `detail`.** API 2.0 removed the top-level `message` from every RFC 9457 error body; `detail` is the one human-readable field. `classify401` (which credential a 401 is about) and the OIDC exchange error now read `detail` only, where they used to fall back to `message` (cli#27). API errors still pass through to stderr verbatim. The CLI's own errors (`{error, code, message, suggestion}`) keep their `message`, since those are not API bodies.
 - **`AGLEDGER_OIDC_AGENT_ID` and `login --oidc-agent-id` are documented as an assertion, not a choice of agent.** The Server binds a cert to the agent the token names (a mapped `agent_id` claim, else the agent carrying the token's `oidcIss`/`oidcSub`, else an auto-provisioned one), and never to one the request body chooses. When the id names a different agent, or the token binds none, the exchange is refused with 403 `CERT_AGENT_BINDING_MISMATCH`; a token bound to a federation shadow agent is refused with 403 `SHADOW_AGENT_CERT_FORBIDDEN`. The flag's help, the README and `SKILL.md` now say so, and point at binding the agent instead: `PATCH /v1/agents/{id}` with `oidcIss` and `oidcSub`, or `claimMapping.agent_id` on the trusted issuer. The CLI still sends the id when it is set, and the refusal still fails with `OIDC_EXCHANGE_FAILED` (exit 4 on a 403) carrying the Server's error body and its `recoveryHint` under `apiError`.
-- **Conformance corpus regenerated** from the 2.0 engine (`apiGitSha 5444a54f`, `apiVersion 2.0.0`): 35 export vectors, every earlier vector with the same expected outcome and failure code, and three new ones covering unsigned entries (two expect `CHAIN_ENTRY_UNSIGNED`, one a clean pass). The suite replays every vector a second time with `--trust-anchor` set to the key the export names, where only the key-substitution vector changes outcome (to `CHAIN_SIGNING_KEY_UNANCHORED`), and an all-unsigned export passes with `verdict: "unanchored"`.
+- **Conformance corpus regenerated** from API 2.0.0: 35 export vectors, every earlier vector with the same expected outcome and failure code, and three new ones covering unsigned entries (two expect `CHAIN_ENTRY_UNSIGNED`, one a clean pass). The suite replays every vector a second time with `--trust-anchor` set to the key the export names, where only the key-substitution vector changes outcome (to `CHAIN_SIGNING_KEY_UNANCHORED`), and an all-unsigned export passes with `verdict: "unanchored"`.
 
 ## [1.5.0] - 2026-09-21
 
 ### Added
 
-- **Conformance corpus regenerated from the tagged 1.8.0 engine** (`apiGitSha 3948cc68`, the `v1.8.0` commit), replacing a corpus generated at API 1.3.4. The export slice goes from 23 to 32 vectors and the dump slice from 12 to 18, and the additions cover this release's own work: `export/actor-attribution-mismatch.json` and `dump/chain-actor-attribution-mismatch` both expect `CHAIN_ACTOR_ATTRIBUTION_MISMATCH`, and `export/agent-signature-invalid.json` expects `CHAIN_AGENT_SIGNATURE_INVALID`. The runner now maps the manifest's `agentKeysFile` to the verifier's agent-key input; without it that vector ran with no agent keys, reported `skipped_no_input`, passed, and failed the suite on a check that never executed.
+- **Conformance corpus regenerated from the tagged 1.8.0 engine** (the `v1.8.0` release), replacing a corpus generated at API 1.3.4. The export slice goes from 23 to 32 vectors and the dump slice from 12 to 18, and the additions cover this release's own work: `export/actor-attribution-mismatch.json` and `dump/chain-actor-attribution-mismatch` both expect `CHAIN_ACTOR_ATTRIBUTION_MISMATCH`, and `export/agent-signature-invalid.json` expects `CHAIN_AGENT_SIGNATURE_INVALID`. The runner now maps the manifest's `agentKeysFile` to the verifier's agent-key input; without it that vector ran with no agent keys, reported `skipped_no_input`, passed, and failed the suite on a check that never executed.
 
 - **`agledger verify` refuses a re-attributed export.** The `actorId`, `actorRole` and `actorOwnerId` an export displays are signature-covered, and they are now cross-checked against the signed actor claim, so an export re-attributed to another actor fails with the new `CHAIN_ACTOR_ATTRIBUTION_MISMATCH` instead of verifying. Requires `@agledger/verify-core` 1.5.0.
 - **`agledger verify --agent-keys <file>` re-verifies sealed agent signatures offline.** The file holds the Ed25519 public keys of agent certs (a JWK, a list of JWKs, a `{keys:[...]}` JWK Set, or entries wrapping one as `{publicKeyJwk}`). An entry whose sealed agent signature names one of them by thumbprint has that signature checked, and a mismatch fails the chain as `CHAIN_AGENT_SIGNATURE_INVALID`. The JSON result reports `agentSignatures {present, verified}`, and the human output prints the count. Requires `@agledger/verify-core` 1.5.0.
@@ -91,7 +99,7 @@ Targets API 2.0 only. The major version follows the API's. 1.6.0 was never publi
 
 ### Added
 
-- **`-f` / `--raw-field`, which takes a value verbatim as a string.** The Server stopped coercing the fields of a JSON body, so a field declared `string` refuses a number. `publisher`, `platformRef`, `projectRef`, `externalTaskId` and `correlationId` are plain strings carrying identifiers minted by other systems, and those are frequently all digits, so `-F externalTaskId=4821` typed the value as a number and was refused. No `-F` form produced the four characters: quoting reached the Server as a string with the quote marks inside it, which the Server accepts, so the nearest workaround notarized a corrupted identifier into a signed, immutable Record and broke every cross-system join on it. `-f` is the one-character answer, and restores parity with `gh api`, which the flag syntax was modelled on and which has had both forms all along. Path syntax is identical; `-F` and `-f` parse together, so `-F a.b=1 -f a.c=2` builds one tree. Reported by agledger-testbed against the 1.4.0 candidate (agents#122).
+- **`-f` / `--raw-field`, which takes a value verbatim as a string.** The Server stopped coercing the fields of a JSON body, so a field declared `string` refuses a number. `publisher`, `platformRef`, `projectRef`, `externalTaskId` and `correlationId` are plain strings carrying identifiers minted by other systems, and those are frequently all digits, so `-F externalTaskId=4821` typed the value as a number and was refused. No `-F` form produced the four characters: quoting reached the Server as a string with the quote marks inside it, which the Server accepts, so the nearest workaround notarized a corrupted identifier into a signed, immutable Record and broke every cross-system join on it. `-f` is the one-character answer, and restores parity with `gh api`, which the flag syntax was modelled on and which has had both forms all along. Path syntax is identical; `-F` and `-f` parse together, so `-F a.b=1 -f a.c=2` builds one tree. Found in pre-release validation of the 1.4.0 candidate.
 
 - **`--idempotency-key` on `agledger api`, and a generated key on every POST.** The CLI could not send an `Idempotency-Key` at all, so a write retried after a timeout or a dropped connection created a second record rather than replaying the first. Every POST now carries a generated key, which makes a single invocation replay-safe on its own. Pass `--idempotency-key` to reuse the first attempt's key when you are retrying a call that may already have reached the Server: the Server returns the original result instead of recording the work twice. The key binds to method, route and body, so a retry that changes the body is rejected rather than silently replaying the old response. Scoped to POST because that is what the engine arms: all 18 routes that opt into idempotency are POST, and the header is ignored elsewhere. `--dry-run` names the key it would send.
 
@@ -107,9 +115,9 @@ Targets API 2.0 only. The major version follows the API's. 1.6.0 was never publi
 
 ### Fixed
 
-- **`--dry-run` no longer reports a server the real call refuses to use.** agents#105 removed the `https://agledger.example.com` placeholder from `createApiClient`, but its sibling `resolvedAuth`, which is the only thing `--dry-run` prints, kept its own copy. With no URL configured, `agledger api GET /v1/records --dry-run` reported `apiUrl: https://agledger.example.com` and exited 0, while the identical invocation without `--dry-run` exited 2 with `CONFIG_ERROR`. The one job of a dry run is to say what the real call would do, and it was naming a host the real call will not contact and the user never configured. It now reports `apiUrl: null` plus an `apiUrlSource` line naming the error the real call raises.
+- **`--dry-run` no longer reports a server the real call refuses to use.** 1.3.0 removed the `https://agledger.example.com` placeholder from `createApiClient`, but its sibling `resolvedAuth`, which is the only thing `--dry-run` prints, kept its own copy. With no URL configured, `agledger api GET /v1/records --dry-run` reported `apiUrl: https://agledger.example.com` and exited 0, while the identical invocation without `--dry-run` exited 2 with `CONFIG_ERROR`. The one job of a dry run is to say what the real call would do, and it was naming a host the real call will not contact and the user never configured. It now reports `apiUrl: null` plus an `apiUrlSource` line naming the error the real call raises.
 
-- **The credential-precedence documentation no longer promises a default API URL.** The README, the `createApiClient` doc comment, and `SKILL.md` all ended the API-URL chain with "> default", left over from before agents#105. There is no default; the chain ends at the stored profile and a call with nothing configured exits 2. `SKILL.md` additionally called `AGLEDGER_API_URL` "Optional", and it ships inside the tarball as the agent-facing description of this CLI, so that was the copy an agent was most likely to act on.
+- **The credential-precedence documentation no longer promises a default API URL.** The README, the `createApiClient` doc comment, and `SKILL.md` all ended the API-URL chain with "> default", left over from before 1.3.0. There is no default; the chain ends at the stored profile and a call with nothing configured exits 2. `SKILL.md` additionally called `AGLEDGER_API_URL` "Optional", and it ships inside the tarball as the agent-facing description of this CLI, so that was the copy an agent was most likely to act on.
 
 ### Changed
 
@@ -117,27 +125,27 @@ Targets API 2.0 only. The major version follows the API's. 1.6.0 was never publi
 
 ### Packaging
 
-- **Source maps are no longer published.** `dist/**/*.map` shipped with `sources` pointing at `../src/*.ts` and no `sourcesContent`, and `src/` is not in the tarball, so they resolved to nothing. This was roughly half the tarball's file count. The build no longer emits them at all, so no shipped `.js` or `.d.ts` carries a `sourceMappingURL` comment pointing at a map the tarball does not contain (agents#114).
+- **Source maps are no longer published.** `dist/**/*.map` shipped with `sources` pointing at `../src/*.ts` and no `sourcesContent`, and `src/` is not in the tarball, so they resolved to nothing. This was roughly half the tarball's file count. The build no longer emits them at all, so no shipped `.js` or `.d.ts` carries a `sourceMappingURL` comment pointing at a map the tarball does not contain.
 - **`bugs` added to package.json.**
 
 ## [1.3.0] - 2026-08-07
 
 ### Changed
 
-- **Public discovery paths no longer require a key.** `docs`, `discover`, and `agledger api GET` against `/health`, `/llms.txt`, `/llms-full.txt`, `/openapi.json`, `/docs`, `/v1/conformance` and `/.well-known/*` now send the request with no Authorization header instead of refusing client-side with `AUTH_REQUIRED`. The Server answers all of these unauthenticated, so an agent holding only a URL previously had to shell out to curl for exactly the bootstrap arc the product optimizes for, and `discover` could not do what its own description ("Call this first") promised. Only GET qualifies, so this can never wave through a write, and the Server stays the authority: a path that starts requiring auth simply answers 401 (agents#104).
-- **No placeholder API URL.** The built-in default was `https://agledger.example.com`, which resolves nowhere, so a first run with no configuration failed with a DNS error against a host the user never named and was told to check a variable they never set. A missing URL now fails immediately with `CONFIG_ERROR` and says what to pass. Exit code is 2, the existing usage-error code (agents#105).
-- **`NETWORK_ERROR` names the URL it tried and the underlying cause.** `fetch failed` is undici's generic text: DNS failure, connection refused, and TLS problems all printed identically. The message now carries the target and the cause code, with a suggestion tailored to `ENOTFOUND` and `ECONNREFUSED` (agents#105).
-- **`CHAIN_KEY_NOT_YET_ACTIVE`** is reported by `agledger verify` for an entry written before its signing key's activation, via `@agledger/verify-core` 1.3.0; `CHAIN_KEY_EXPIRED` now means the retirement side only (agents#112).
+- **Public discovery paths no longer require a key.** `docs`, `discover`, and `agledger api GET` against `/health`, `/llms.txt`, `/llms-full.txt`, `/openapi.json`, `/docs`, `/v1/conformance` and `/.well-known/*` now send the request with no Authorization header instead of refusing client-side with `AUTH_REQUIRED`. The Server answers all of these unauthenticated, so an agent holding only a URL previously had to shell out to curl for exactly the bootstrap arc the product optimizes for, and `discover` could not do what its own description ("Call this first") promised. Only GET qualifies, so this can never wave through a write, and the Server stays the authority: a path that starts requiring auth simply answers 401.
+- **No placeholder API URL.** The built-in default was `https://agledger.example.com`, which resolves nowhere, so a first run with no configuration failed with a DNS error against a host the user never named and was told to check a variable they never set. A missing URL now fails immediately with `CONFIG_ERROR` and says what to pass. Exit code is 2, the existing usage-error code.
+- **`NETWORK_ERROR` names the URL it tried and the underlying cause.** `fetch failed` is undici's generic text: DNS failure, connection refused, and TLS problems all printed identically. The message now carries the target and the cause code, with a suggestion tailored to `ENOTFOUND` and `ECONNREFUSED`.
+- **`CHAIN_KEY_NOT_YET_ACTIVE`** is reported by `agledger verify` for an entry written before its signing key's activation, via `@agledger/verify-core` 1.3.0; `CHAIN_KEY_EXPIRED` now means the retirement side only.
 
 ### Fixed
 
-- **README Quick Start and two `api --help` examples returned 400.** They built criteria as `task_description`; both seeded contracts (`notarize-generic-v1`, `principal-gate-generic-v1`) require `summary`, so the first documented write failed against the shipped server. Both forms are now verified to run against a live instance (agents#106).
-- **`verify` no longer borrows the `api` command's recovery text.** Its read and parse failures suggested `--input` and `--data`, flags `verify` does not have (agents#107).
-- **An unknown command gives a nearest match and a way forward** instead of a bare "not found": a did-you-mean, a pointer to `list-commands`, and a note that `agledger api` reaches every route (agents#107).
+- **README Quick Start and two `api --help` examples returned 400.** They built criteria as `task_description`; both seeded contracts (`notarize-generic-v1`, `principal-gate-generic-v1`) require `summary`, so the first documented write failed against the shipped server. Both forms are now verified to run against a live instance.
+- **`verify` no longer borrows the `api` command's recovery text.** Its read and parse failures suggested `--input` and `--data`, flags `verify` does not have.
+- **An unknown command gives a nearest match and a way forward** instead of a bare "not found": a did-you-mean, a pointer to `list-commands`, and a note that `agledger api` reaches every route.
 
 ### Documentation
 
-- Exit code **1** is documented as the catch-all it is: an API error whose status maps to nothing more specific (a 400) exits 1, as does a chain that fails `verify`. Read the `code` field to tell them apart, and treat any non-zero as failure rather than keying on 1 (agents#107).
+- Exit code **1** is documented as the catch-all it is: an API error whose status maps to nothing more specific (a 400) exits 1, as does a chain that fails `verify`. Read the `code` field to tell them apart, and treat any non-zero as failure rather than keying on 1.
 
 ## [1.2.0] - 2026-08-05
 
@@ -149,7 +157,7 @@ Signing-agility wave 2.
 
 ### Changed
 
-- **Conformance corpus regenerated from engine 1.3.4 @ `ed3369ab`** (export slice, including the ES256 wave).
+- **Conformance corpus regenerated from API 1.3.4** (export slice, including the ES256 wave).
 
 ## [1.1.0] - 2026-08-05
 
@@ -162,7 +170,7 @@ Signing-agility wave 2.
 
 ### Fixed
 
-- `help-json <command>` now surfaces a flag's short alias as `char` (cross-repo #100). The `-F` alias on `agledger api --field` has always worked, but the discovery schema listed only the long form, so a doc showing `-F key=val` could not be verified against `help-json`. Flags without a short alias omit `char`.
+- `help-json <command>` now surfaces a flag's short alias as `char`. The `-F` alias on `agledger api --field` has always worked, but the discovery schema listed only the long form, so a doc showing `-F key=val` could not be verified against `help-json`. Flags without a short alias omit `char`.
 
 ## [1.0.5] - 2026-07-16
 
@@ -170,7 +178,7 @@ Docs and tooling. No command, output, or behavior change.
 
 ### Changed
 
-- README corrections (cross-repo #99): dropped the drift-prone "250+ routes" claim in favor of a parity statement, the `agledger_discover` quickstart string now leads with notarize, and removed the phantom "fulfill" endpoint and "Layer 3" framing along with stale naming history.
+- README corrections: dropped the drift-prone "250+ routes" claim in favor of a parity statement, the `agledger_discover` quickstart string now leads with notarize, and removed the phantom "fulfill" endpoint and "Layer 3" framing along with stale naming history.
 - Refreshed the lockfile to in-range latest (`@agledger/verify-core` 1.0.2, oclif, and dev tooling).
 - Upgraded the TypeScript devDependency to `^7.0.2`. Build (including the `oclif manifest` regeneration), typecheck, and tests all pass under 7.0.2.
 
@@ -178,13 +186,13 @@ Docs and tooling. No command, output, or behavior change.
 
 ### Changed
 
-- Docs only: removed em-dashes from the README prose and the package.json description (cross-repo #98 writing-style sweep). Rewrote each sentence rather than swapping the glyph. No command, output, or behavior change.
+- Docs only: removed em-dashes from the README prose and the package.json description (writing-style sweep). Rewrote each sentence rather than swapping the glyph. No command, output, or behavior change.
 
 ## [1.0.3] - 2026-06-22
 
 ### Fixed
 
-- **`agledger auth` reported not-authenticated right after a successful `login`** (cross-repo #94). The status check looked only at the `--api-key` flag / `AGLEDGER_API_KEY` env var, ignoring the credential `login` writes to a stored profile in `~/.agledger/config.json` — so the first command a new user runs to confirm setup said it failed when it hadn't. `auth` now resolves the key with the same precedence as every other command (flag → env → active stored profile) and reports the resolving `source` (and `profile`, when applicable). A keyless machine still reports `authenticated: false` with exit 0. Validated end-to-end against a live API v1.0.3.
+- **`agledger auth` reported not-authenticated right after a successful `login`**. The status check looked only at the `--api-key` flag / `AGLEDGER_API_KEY` env var, ignoring the credential `login` writes to a stored profile in `~/.agledger/config.json` — so the first command a new user runs to confirm setup said it failed when it hadn't. `auth` now resolves the key with the same precedence as every other command (flag → env → active stored profile) and reports the resolving `source` (and `profile`, when applicable). A keyless machine still reports `authenticated: false` with exit 0. Validated end-to-end against a live API v1.0.3.
 
 ## [1.0.2] - 2026-06-20
 
@@ -237,8 +245,6 @@ No functional change. First release published from CI with **build provenance** 
 
 ## [0.8.7] - 2026-05-29
 
-Closes [agledger-agents#85 (F-732)](https://github.com/agledger-ai/agledger-agents/issues/85).
-
 ### Added
 
 - **`agledger docs [--full]`** — fetches the API's agent-oriented documentation narrative (`/llms.txt`, or `/llms-full.txt` with `--full`). `discover` and `list-commands` now point at it.
@@ -253,7 +259,7 @@ Closes [agledger-agents#85 (F-732)](https://github.com/agledger-ai/agledger-agen
 
 ### Changed
 
-- Republished against `@agledger/verify-core` 0.1.2 — picks up F-698 OOB-key polymorphism and the temporal-axis fix. `agledger verify --keys vault-keys.json` now accepts either form of the keys file: the compact `{keyId: SPKI-DER-base64}` map (what the docs showed) OR the natural list shape returned by `GET /v1/verification-keys` (i.e. dump the response's `.data` array to a file and pass it directly). Help text updated.
+- Republished against `@agledger/verify-core` 0.1.2 — picks up OOB-key polymorphism and the temporal-axis fix. `agledger verify --keys vault-keys.json` now accepts either form of the keys file: the compact `{keyId: SPKI-DER-base64}` map (what the docs showed) OR the natural list shape returned by `GET /v1/verification-keys` (i.e. dump the response's `.data` array to a file and pass it directly). Help text updated.
 - Malformed `--keys` files now produce the CLI's structured error envelope (`{code: "INVALID_JSON_INPUT", message, suggestion}` on stderr, exit 2) instead of an unhandled `TypeError` stack trace. Agents parsing stderr can now self-correct rather than asking the user.
 
 ## [0.8.5] - 2026-05-28
@@ -275,7 +281,7 @@ Verifier consolidation (Pass 1). `agledger verify` now runs on the shared verifi
 
 ### Fixed
 
-- **`agledger verify` rejected valid exports (F-682).** The offline verifier read the legacy `position` field on each export entry, but current exports (v0.25+) emit `chainPosition`. With `position` absent, every valid export failed with a false `position_gap` on the first entry. Now reads `chainPosition` with a `position` fallback for pre-v0.25 exports. Verified end-to-end against a live export (valid → exit 0, tampered → exit 1).
+- **`agledger verify` rejected valid exports.** The offline verifier read the legacy `position` field on each export entry, but current exports (v0.25+) emit `chainPosition`. With `position` absent, every valid export failed with a false `position_gap` on the first entry. Now reads `chainPosition` with a `position` fallback for pre-v0.25 exports. Verified end-to-end against a live export (valid → exit 0, tampered → exit 1).
 
 ## [0.8.2] - 2026-05-27
 
@@ -296,7 +302,7 @@ Tracks AGLedger API v0.24.0. CLI is a thin pass-through, so the v0.24.0 rename s
 
 ## [0.8.0] - 2026-05-19
 
-Tracks AGLedger API v0.23.0. SCITT vocabulary alignment + canonical COSE_Sign1 chain envelope cutover. The CLI is a thin pass-through, so most of the wave shows up as text changes — but the offline verifier (`agledger verify`) is a full rewrite. Closes cross-repo issue agledger-agents#68.
+Tracks AGLedger API v0.23.0. SCITT vocabulary alignment + canonical COSE_Sign1 chain envelope cutover. The CLI is a thin pass-through, so most of the wave shows up as text changes — but the offline verifier (`agledger verify`) is a full rewrite.
 
 ### Changed (BREAKING — offline verifier: format 1.0 → 2.0)
 
@@ -317,8 +323,6 @@ Tracks AGLedger API v0.23.0. SCITT vocabulary alignment + canonical COSE_Sign1 c
 The CLI is a pure pass-through over `agledger api <METHOD> <path>`, so the API-side renames (route paths, request/response field names, webhook event names, scopes) all surface verbatim without flag changes. Customers writing scripts against `agledger api POST /v1/records/{id}/receipts` need to update the path to `/v1/records/{id}/completions`.
 
 ## [0.7.2] - 2026-05-02
-
-Resolves cross-repo issue agledger-agents#63.
 
 ### Fixed
 - **`agledger discover` no longer advertises `/docs` unconditionally.** The hardcoded `swaggerUi: 'Your instance serves interactive Swagger UI at /docs.'` line was misleading on instances with `SWAGGER_UI_ENABLED=false` (the production default). API v0.22.17 added a 302 redirect at `/docs` so the URL no longer 404s, but the CLI's discover hint still pointed operators at the wrong place. Customers who need the API reference should hit `GET /openapi.json` (always-on) — already documented in the same response.

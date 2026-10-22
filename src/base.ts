@@ -10,7 +10,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { Command, Flags } from '@oclif/core';
+import { Command, Errors, Flags } from '@oclif/core';
 import { ApiClient } from './api-client.js';
 import type { ApiResponse } from './api-client.js';
 import {
@@ -213,6 +213,21 @@ export abstract class BaseCommand extends Command {
 
   protected get isQuiet(): boolean {
     return process.argv.includes('--quiet');
+  }
+
+  /**
+   * oclif's own refusals (an unknown flag, a missing argument, a bad enum
+   * value) reach here before any command code runs. Under --quiet they exit
+   * as a usage error with nothing written, as every other error does; an
+   * explicit `this.exit(code)` passes through untouched, since it already
+   * carries the code the command chose.
+   */
+  protected override async catch(err: Error & { exitCode?: number }): Promise<unknown> {
+    if (this.isQuiet && !(err instanceof Errors.ExitError)) {
+      const exit = (err as { oclif?: { exit?: unknown } }).oclif?.exit;
+      this.exit(typeof exit === 'number' ? exit : ExitCode.GENERAL_ERROR);
+    }
+    return super.catch(err);
   }
 
   /** Write one diagnostic line to stderr under --verbose. Callers pass no secrets. */
@@ -574,9 +589,19 @@ export abstract class BaseCommand extends Command {
     const error: Record<string, unknown> = { error: true, code, message };
     if (suggestion) error.suggestion = suggestion;
     if (extra) Object.assign(error, extra);
-    process.stderr.write(JSON.stringify(error) + '\n');
+    this.writeError(error);
     this.exit(exitCode);
     throw new Error('unreachable');
+  }
+
+  /**
+   * The one place a structured error leaves the process. Under --quiet it
+   * leaves nothing: the flag promises exit code only, and a caller that
+   * asked for that reads the code, not a body it told the CLI not to write.
+   */
+  private writeError(error: Record<string, unknown>): void {
+    if (this.isQuiet) return;
+    process.stderr.write(JSON.stringify(error) + '\n');
   }
 
   /**
@@ -588,7 +613,7 @@ export abstract class BaseCommand extends Command {
     const body = (response.body ?? {}) as Record<string, unknown>;
     const exitCode = this.statusToExitCode(response.status);
     const error: Record<string, unknown> = { error: true, ...body };
-    process.stderr.write(JSON.stringify(error) + '\n');
+    this.writeError(error);
     this.exit(exitCode);
     throw new Error('unreachable');
   }
@@ -616,7 +641,7 @@ export abstract class BaseCommand extends Command {
         source: err.origin,
         apiError: err.body,
       };
-      process.stderr.write(JSON.stringify(error) + '\n');
+      this.writeError(error);
       this.exit(this.statusToExitCode(err.status));
       throw new Error('unreachable');
     }
