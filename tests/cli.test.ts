@@ -20,7 +20,7 @@ import { writeFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { flagWording } from '../src/commands/verify.js';
+import { flagWording, peerMessagesLine } from '../src/commands/verify.js';
 
 const BIN = resolve(import.meta.dirname, '../bin/run.js');
 
@@ -964,6 +964,22 @@ describe('verify command', () => {
   // kept it.
   const LIVE = resolve(import.meta.dirname, '../testdata/live-2.0.0');
 
+  it('the peer-message line tells a key that did not match from a hub given no key', () => {
+    expect(peerMessagesLine({ present: 0, verified: 0, failed: 0 }, true)).toBeNull();
+    expect(peerMessagesLine({ present: 2, verified: 2, failed: 0 }, true)).toBe(
+      'Peer messages: 2/2 sealed federation messages re-verified under --federation-key.',
+    );
+    expect(peerMessagesLine({ present: 3, verified: 0, failed: 0 }, false)).toContain('the peer signatures were not checked');
+    const wrong = peerMessagesLine({ present: 5, verified: 0, failed: 5 }, true)!;
+    expect(wrong).toBe('Peer messages: 0/5 re-verified; 5 failed CHAIN_FEDERATION_WIRE_INVALID.');
+    expect(peerMessagesLine({ present: 5, verified: 1, failed: 2 }, true)).toBe(
+      'Peer messages: 1/5 re-verified; 2 failed CHAIN_FEDERATION_WIRE_INVALID; 2 come from a hub with no --federation-key and were hashed and matched to their entry only.',
+    );
+    expect(peerMessagesLine({ present: 2, verified: 0, failed: 1 }, false)).toBe(
+      'Peer messages: 0/2 re-verified; 1 failed CHAIN_FEDERATION_WIRE_INVALID; 1 were hashed and matched to their entry only; pass --federation-key <hubId>=<key> for each peer to re-verify them.',
+    );
+  });
+
   it('--federation-key is checked before anything is verified', () => {
     const bad = run(`verify ${VECTORS}/valid.json --federation-key hub-b=not-a-key --json`);
     expect(bad.exitCode).toBe(2);
@@ -979,7 +995,7 @@ describe('verify command', () => {
     const result = run(`verify ${VECTORS}/valid.json --federation-key hub-b=${key} --json`);
     expect(result.exitCode).toBe(0);
     const out = JSON.parse(result.stdout);
-    expect(out.federationWire).toEqual({ present: 0, verified: 0 });
+    expect(out.federationWire).toEqual({ present: 0, verified: 0, failed: 0 });
     expect(out.optionalChecks.federation_wire).toBe('skipped_no_input');
   });
 

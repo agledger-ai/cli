@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
-- **`--federation-key <hubId>=<key>` on `verify`:** a receiving Server's `FEDERATION_*` entries seal each peer message as the peer signed it (`payload.wire`); every sealed message is held to its body hash and to its entry, and one from a hub whose federation key is given is also re-verified under it. A bad value is a usage error before the export is read; a sealed message that does not hold fails `CHAIN_FEDERATION_WIRE_INVALID`. Needs `@agledger/verify-core` 2.1.0.
+- **`--federation-key <hubId>=<key>` on `verify`:** a receiving Server's `FEDERATION_*` entries seal each peer message as the peer signed it (`payload.wire`); every sealed message is held to its body hash and to its entry, and one from a hub whose federation key is given is also re-verified under it. A bad value is a usage error before the export is read; a sealed message that does not hold fails `CHAIN_FEDERATION_WIRE_INVALID`. `--json` carries `federationWire: { present, verified, failed }`, and the human output's `Peer messages` line counts the failures apart from the messages a hub with no key sent. Needs `@agledger/verify-core` 2.1.0.
 
 ### Fixed
 

@@ -454,18 +454,8 @@ export default class Verify extends BaseCommand {
     // Agent signatures are checked only against keys the caller supplies, so
     // the lines below say exactly how many were, and the PASS line speaks for
     // the Server's signatures alone.
-    const wire = result.federationWire;
-    if (wire.present > 0 && wire.present === wire.verified) {
-      out.write(`       Peer messages: ${wire.verified}/${wire.present} sealed federation messages re-verified under --federation-key.\n`);
-    } else if (wire.present > 0 && federationKeysGiven) {
-      out.write(
-        `       Peer messages: ${wire.verified}/${wire.present} re-verified; ${wire.present - wire.verified} come from a hub with no --federation-key and were hashed and matched to their entry only.\n`,
-      );
-    } else if (wire.present > 0) {
-      out.write(
-        `       Peer messages: ${wire.present} sealed on the chain, hashed and matched to their entry; the peer signatures were not checked. Pass --federation-key <hubId>=<key> for each peer to re-verify them.\n`,
-      );
-    }
+    const peerLine = peerMessagesLine(result.federationWire, federationKeysGiven);
+    if (peerLine) out.write(`       ${peerLine}\n`);
 
     const { present, verified } = result.agentSignatures;
     const unchecked = present - verified;
@@ -511,4 +501,33 @@ export default class Verify extends BaseCommand {
       out.write(`       ${failures.length} entries failed verification.\n`);
     }
   }
+}
+
+/**
+ * The human line on the sealed federation messages, or null when the chain
+ * carries none. `failed` messages failed a check and are reported as
+ * failures; the rest of the unverified ones came from a hub with no key.
+ */
+export function peerMessagesLine(
+  wire: { present: number; verified: number; failed: number },
+  federationKeysGiven: boolean,
+): string | null {
+  if (wire.present === 0) return null;
+  if (wire.present === wire.verified) {
+    return `Peer messages: ${wire.verified}/${wire.present} sealed federation messages re-verified under --federation-key.`;
+  }
+  if (!federationKeysGiven && wire.failed === 0) {
+    return `Peer messages: ${wire.present} sealed on the chain, hashed and matched to their entry; the peer signatures were not checked. Pass --federation-key <hubId>=<key> for each peer to re-verify them.`;
+  }
+  const noKey = wire.present - wire.verified - wire.failed;
+  const parts = [`${wire.verified}/${wire.present} re-verified`];
+  if (wire.failed > 0) parts.push(`${wire.failed} failed CHAIN_FEDERATION_WIRE_INVALID`);
+  if (noKey > 0) {
+    parts.push(
+      federationKeysGiven
+        ? `${noKey} come from a hub with no --federation-key and were hashed and matched to their entry only`
+        : `${noKey} were hashed and matched to their entry only; pass --federation-key <hubId>=<key> for each peer to re-verify them`,
+    );
+  }
+  return `Peer messages: ${parts.join('; ')}.`;
 }
