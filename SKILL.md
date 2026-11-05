@@ -52,11 +52,6 @@ agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value | -f key
 - The hash chain is contiguous from the first entry to the last: no entries inserted, removed, or reordered between positions.
 - On failure, `brokenAt.code` is a canonical SCREAMING_SNAKE failure code (e.g. `CHAIN_HASH_MISMATCH`, `CHAIN_SIGNATURE_INVALID`, `CHAIN_SIGNING_KEY_UNANCHORED`, and `KEY_STATEMENT_INVALID`, `KEY_CLOSURE_INVALID`, `CHAIN_KEY_WINDOW_DRIFT`, which are listed under `keyTrust.findings` and are `brokenAt` at position 0 only when the chain itself is intact). A `CHAIN_KEY_WINDOW_DRIFT` whose detail names a `--distrusted-key sha256:<digest>@<instant>` is the export saying the Server distrusts that key from that instant (`distrustedFrom`): its unsigned word, so confirm the instant with the operator before rerunning with that flag.
 
-**What verification does NOT prove:**
-- That the signing key is *legitimate* without `--trust-anchor`. `/v1/verification-keys` and `/.well-known/scitt-keys` are served by the same Server; the export's `exportMetadata.anchoredFrom` is the Server's own claim. Pin a digest you took out of band.
-- That the export is *complete*. A vault operator can still truncate the export at either end.
-- That the *content* the payload describes actually happened. Payloads record what the agent notarized (declared intent and reported result); the verifier checks tamper-evidence, not whether the work occurred.
-
 ## Agent-native patterns
 - `--json` on every command (auto when piped)
 - `--quiet` for exit-code-only operation
