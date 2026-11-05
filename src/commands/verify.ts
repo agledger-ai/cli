@@ -151,7 +151,7 @@ export default class Verify extends BaseCommand {
         'held to its body hash and to its entry; one from a hub given here also has its signature re-verified ' +
         'under that key, which proves what the peer asserted from this export alone. A failure is ' +
         'CHAIN_FEDERATION_WIRE_INVALID. Repeatable, once per peer; name a hub twice to pin a second key ' +
-        'no succession links to the first (one its history lists linked: false).',
+        'no succession links to the first: one its history lists linked: false, or one it does not list at all.',
     }),
     'federation-key-history': Flags.string({
       multiple: true,
@@ -160,8 +160,9 @@ export default class Verify extends BaseCommand {
         'Path to a peer\'s federation key history, the JSON its GET /.well-known/agledger-federation-keys.json serves ' +
         '(no auth). Needs a --federation-key for the same hub: every key the history links to that key through ' +
         'successions both keys signed is trusted inside its window, so entries sealed before the peer changed its ' +
-        'federation key verify. A message under a key activated after the receiver took it fails; one under a key ' +
-        'retired before it is reported as after retirement. Repeatable.',
+        'federation key verify. Each message is placed by its signed wire.timestamp, never by the unsigned ' +
+        'createdAt: one signed under a key before the key\'s activation fails; one signed after its retirement is ' +
+        'reported as after retirement. Repeatable.',
     }),
     'require-key-id': Flags.string({
       description:
@@ -504,6 +505,8 @@ export default class Verify extends BaseCommand {
     // the Server's signatures alone.
     const peerLine = peerMessagesLine(result.federationWire, federationKeysGiven);
     if (peerLine) out.write(`       ${peerLine}\n`);
+    const evidenceLine = evidenceBodiesLine(result.evidenceBinding);
+    if (evidenceLine) out.write(`       ${evidenceLine}\n`);
 
     const { present, verified } = result.agentSignatures;
     const unchecked = present - verified;
@@ -552,6 +555,21 @@ export default class Verify extends BaseCommand {
 }
 
 /**
+ * The human line on the evidence bodies an `?evidence=true` export inlines,
+ * or null when it carries none. Each is hashed against the evidenceHash or
+ * payloadHash its entry signs; an encrypted-mode completion cannot be.
+ */
+export function evidenceBodiesLine(counts: { present: number; verified: number; clientHashed: number; failed: number }): string | null {
+  if (counts.present === 0) return null;
+  const parts = [`${counts.verified}/${counts.present} inlined evidence bodies hash (RFC 8785, SHA-256) to the hash their entry signs`];
+  if (counts.failed > 0) parts.push(`${counts.failed} failed CHAIN_EVIDENCE_BINDING_MISMATCH`);
+  if (counts.clientHashed > 0) {
+    parts.push(`${counts.clientHashed} on an encrypted-mode completion, whose signed hash covers a cleartext the export does not carry, so not re-bound`);
+  }
+  return `Evidence: ${parts.join('; ')}.`;
+}
+
+/**
  * The human line on the sealed federation messages, or null when the chain
  * carries none. `failed` messages failed a check and are reported as
  * failures; the rest of the unverified ones came from a hub with no key.
@@ -563,7 +581,7 @@ export function peerMessagesLine(
   if (wire.present === 0) return null;
   const retired =
     wire.afterRetirement > 0
-      ? ` ${wire.afterRetirement} of them signed under a key the peer had retired before the receiver took it: in order when the receiver's federation.peer_revoked row for the peer comes after them.`
+      ? ` ${wire.afterRetirement} of them signed by the peer under a key it had already retired: in order when the receiver's federation.peer_revoked row for the peer comes after them.`
       : '';
   if (wire.present === wire.verified) {
     return `Peer messages: ${wire.verified}/${wire.present} sealed federation messages re-verified under --federation-key.${retired}`;

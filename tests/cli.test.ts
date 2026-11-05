@@ -20,7 +20,7 @@ import { writeFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { flagWording, peerMessagesLine } from '../src/commands/verify.js';
+import { evidenceBodiesLine, flagWording, peerMessagesLine } from '../src/commands/verify.js';
 
 const BIN = resolve(import.meta.dirname, '../bin/run.js');
 
@@ -964,6 +964,16 @@ describe('verify command', () => {
   // kept it.
   const LIVE = resolve(import.meta.dirname, '../testdata/live-2.0.0');
 
+  it('says how many inlined evidence bodies re-bound, failed, or could not be re-bound', () => {
+    expect(evidenceBodiesLine({ present: 0, verified: 0, clientHashed: 0, failed: 0 })).toBeNull();
+    expect(evidenceBodiesLine({ present: 2, verified: 2, clientHashed: 0, failed: 0 })).toBe(
+      'Evidence: 2/2 inlined evidence bodies hash (RFC 8785, SHA-256) to the hash their entry signs.',
+    );
+    expect(evidenceBodiesLine({ present: 3, verified: 1, clientHashed: 1, failed: 1 })).toBe(
+      'Evidence: 1/3 inlined evidence bodies hash (RFC 8785, SHA-256) to the hash their entry signs; 1 failed CHAIN_EVIDENCE_BINDING_MISMATCH; 1 on an encrypted-mode completion, whose signed hash covers a cleartext the export does not carry, so not re-bound.',
+    );
+  });
+
   it('the peer-message line tells a key that did not match from a hub given no key', () => {
     expect(peerMessagesLine({ present: 0, verified: 0, failed: 0, afterRetirement: 0 }, true)).toBeNull();
     expect(peerMessagesLine({ present: 2, verified: 2, failed: 0, afterRetirement: 0 }, true)).toBe(
@@ -992,7 +1002,7 @@ describe('verify command', () => {
 
   it('the peer-message line names messages signed under a key the peer had retired', () => {
     expect(peerMessagesLine({ present: 2, verified: 2, failed: 0, afterRetirement: 1 }, true)).toBe(
-      'Peer messages: 2/2 sealed federation messages re-verified under --federation-key. 1 of them signed under a key the peer had retired before the receiver took it: in order when the receiver\'s federation.peer_revoked row for the peer comes after them.',
+      'Peer messages: 2/2 sealed federation messages re-verified under --federation-key. 1 of them signed by the peer under a key it had already retired: in order when the receiver\'s federation.peer_revoked row for the peer comes after them.',
     );
   });
 
