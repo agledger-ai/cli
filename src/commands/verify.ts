@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { Args, Flags } from '@oclif/core';
 import {
   assertNotPinnedAndDistrusted,
@@ -7,6 +7,8 @@ import {
   verifyAuditExport,
   normalizeFederationKey,
   type AgentPublicKeyJwk,
+  type FederationKeyEntry,
+  type FederationKeyHistoryDocument,
   type SuppliedKeyEntry,
   type VerifyExportResult,
   type RecordAuditExportInput,
@@ -29,6 +31,8 @@ const OPTION_FLAGS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\brequireSuppliedKeys\b/g, '--require-supplied-keys'],
   [/\brequireKeyId\b/g, '--require-key-id'],
   [/\bagentKeys\b/g, '--agent-keys'],
+  [/\bfederationKeys\[\d+\]\.history\b/g, '--federation-key-history'],
+  [/\bfederationKeys\[\d+\]/g, '--federation-key'],
   [/\bfederationKeys\b/g, '--federation-key'],
 ];
 
@@ -146,7 +150,18 @@ export default class Verify extends BaseCommand {
         'it accepts on the chain entry it writes (payload.wire), as the peer signed it. Every sealed message is ' +
         'held to its body hash and to its entry; one from a hub given here also has its signature re-verified ' +
         'under that key, which proves what the peer asserted from this export alone. A failure is ' +
-        'CHAIN_FEDERATION_WIRE_INVALID. Repeatable, once per peer.',
+        'CHAIN_FEDERATION_WIRE_INVALID. Repeatable, once per peer; name a hub twice to pin a second key ' +
+        'no succession links to the first (one its history lists linked: false).',
+    }),
+    'federation-key-history': Flags.string({
+      multiple: true,
+      multipleNonGreedy: true,
+      description:
+        'Path to a peer\'s federation key history, the JSON its GET /.well-known/agledger-federation-keys.json serves ' +
+        '(no auth). Needs a --federation-key for the same hub: every key the history links to that key through ' +
+        'successions both keys signed is trusted inside its window, so entries sealed before the peer changed its ' +
+        'federation key verify. A message under a key activated after the receiver took it fails; one under a key ' +
+        'retired before it is reported as after retirement. Repeatable.',
     }),
     'require-key-id': Flags.string({
       description:
@@ -259,7 +274,10 @@ export default class Verify extends BaseCommand {
         )
       : undefined;
 
-    const federationKeys = this.parseFederationKeys(flags['federation-key'] ?? []);
+    const federationKeys = this.attachFederationKeyHistories(
+      this.parseFederationKeys(flags['federation-key'] ?? []),
+      flags['federation-key-history'] ?? [],
+    );
 
     const exportData = this.readJsonSource(
       args.file,
@@ -307,11 +325,12 @@ export default class Verify extends BaseCommand {
       if (err instanceof TypeError) {
         this.failWith(
           ErrorCode.INVALID_FIELD,
-          err.message,
+          flagWording(err.message),
           ExitCode.USAGE_ERROR,
           'The --keys file must be a {keyId: SPKI-DER-base64} map or a list of ' +
             '{keyId, publicKey, activatedAt?, retiredAt?} entries with RFC 3339 windows (the /v1/verification-keys body works as is); ' +
-            'the --agent-keys file must hold Ed25519 JWKs ({"kty":"OKP","crv":"Ed25519","x":"..."}).',
+            'the --agent-keys file must hold Ed25519 JWKs ({"kty":"OKP","crv":"Ed25519","x":"..."}); ' +
+            'a --federation-key-history file must be the peer\'s served document, unaltered, and reach the --federation-key given for its hub.',
         );
       }
       throw err;
@@ -357,12 +376,12 @@ export default class Verify extends BaseCommand {
    * the key it sent at cert exchange) is unwrapped. verify-core validates each.
    */
   /**
-   * `--federation-key` values into the `{ [hubId]: key }` map verify-core
-   * takes, each checked here so a bad key is a usage error, not a verdict.
+   * `--federation-key` values into the `[{ hubId, publicKey }]` list
+   * verify-core takes, each checked here so a bad key is a usage error, not a
+   * verdict. A hub named twice pins two keys.
    */
-  private parseFederationKeys(values: readonly string[]): Record<string, string> | undefined {
-    if (values.length === 0) return undefined;
-    const out: Record<string, string> = {};
+  private parseFederationKeys(values: readonly string[]): FederationKeyEntry[] {
+    const out: FederationKeyEntry[] = [];
     const shape =
       'Each --federation-key is <hubId>=<key>: the peer\'s hub id, then its Ed25519 federation key as base64 SPKI DER or base64 of the raw 32 bytes, as its operator gives it.';
     for (const value of values) {
@@ -375,10 +394,39 @@ export default class Verify extends BaseCommand {
       if (normalizeFederationKey(key) === null) {
         this.failWith(ErrorCode.INVALID_FIELD, `Invalid --federation-key for hub ${hubId}: the key is not an Ed25519 public key.`, ExitCode.USAGE_ERROR, shape);
       }
-      if (hubId in out) {
-        this.failWith(ErrorCode.INVALID_FIELD, `--federation-key names hub ${hubId} twice.`, ExitCode.USAGE_ERROR, 'Give each peer one key.');
+      out.push({ hubId, publicKey: key });
+    }
+    return out;
+  }
+
+  /**
+   * Each `--federation-key-history` file attached to the `--federation-key`
+   * entry for the hub it names, or undefined when neither flag was given. A
+   * history needs a key for its hub: alone it is the peer's word.
+   */
+  private attachFederationKeyHistories(keys: FederationKeyEntry[], paths: readonly string[]): FederationKeyEntry[] | undefined {
+    if (keys.length === 0 && paths.length === 0) return undefined;
+    const out = keys.map((k) => ({ ...k }));
+    for (const path of paths) {
+      let doc: unknown;
+      try {
+        doc = JSON.parse(readFileSync(path, 'utf8'));
+      } catch (err) {
+        this.failWith(ErrorCode.INVALID_FIELD, `Cannot read --federation-key-history ${path}: ${(err as Error).message}`, ExitCode.USAGE_ERROR,
+          'Pass the JSON the peer serves at GET /.well-known/agledger-federation-keys.json.');
       }
-      out[hubId] = key;
+      const hubId = doc !== null && typeof doc === 'object' ? (doc as { hubId?: unknown }).hubId : undefined;
+      if (typeof hubId !== 'string' || hubId === '') {
+        this.failWith(ErrorCode.INVALID_FIELD, `--federation-key-history ${path} is not a key-history document naming its hub.`, ExitCode.USAGE_ERROR,
+          'Pass the JSON the peer serves at GET /.well-known/agledger-federation-keys.json, with federation configured on the peer.');
+      }
+      const entry = out.find((k) => k.hubId === hubId && k.history === undefined) ?? out.find((k) => k.hubId === hubId);
+      if (entry === undefined) {
+        this.failWith(ErrorCode.INVALID_FIELD, `--federation-key-history ${path} is hub ${hubId}'s, and no --federation-key names that hub.`, ExitCode.USAGE_ERROR,
+          'Give the key you hold for it with --federation-key <hubId>=<key> (the signingPublicKey your peer row holds, or one its operator confirmed): the history is trusted only from a key you pinned.');
+      }
+      if (entry.history !== undefined) out.push({ hubId, publicKey: entry.publicKey, history: doc as FederationKeyHistoryDocument });
+      else entry.history = doc as FederationKeyHistoryDocument;
     }
     return out;
   }
@@ -509,12 +557,16 @@ export default class Verify extends BaseCommand {
  * failures; the rest of the unverified ones came from a hub with no key.
  */
 export function peerMessagesLine(
-  wire: { present: number; verified: number; failed: number },
+  wire: { present: number; verified: number; failed: number; afterRetirement: number },
   federationKeysGiven: boolean,
 ): string | null {
   if (wire.present === 0) return null;
+  const retired =
+    wire.afterRetirement > 0
+      ? ` ${wire.afterRetirement} of them signed under a key the peer had retired before the receiver took it: in order when the receiver's federation.peer_revoked row for the peer comes after them.`
+      : '';
   if (wire.present === wire.verified) {
-    return `Peer messages: ${wire.verified}/${wire.present} sealed federation messages re-verified under --federation-key.`;
+    return `Peer messages: ${wire.verified}/${wire.present} sealed federation messages re-verified under --federation-key.${retired}`;
   }
   if (!federationKeysGiven && wire.failed === 0) {
     return `Peer messages: ${wire.present} sealed on the chain, hashed and matched to their entry; the peer signatures were not checked. Pass --federation-key <hubId>=<key> for each peer to re-verify them.`;
@@ -529,5 +581,5 @@ export function peerMessagesLine(
         : `${noKey} were hashed and matched to their entry only; pass --federation-key <hubId>=<key> for each peer to re-verify them`,
     );
   }
-  return `Peer messages: ${parts.join('; ')}.`;
+  return `Peer messages: ${parts.join('; ')}.${retired}`;
 }

@@ -965,17 +965,17 @@ describe('verify command', () => {
   const LIVE = resolve(import.meta.dirname, '../testdata/live-2.0.0');
 
   it('the peer-message line tells a key that did not match from a hub given no key', () => {
-    expect(peerMessagesLine({ present: 0, verified: 0, failed: 0 }, true)).toBeNull();
-    expect(peerMessagesLine({ present: 2, verified: 2, failed: 0 }, true)).toBe(
+    expect(peerMessagesLine({ present: 0, verified: 0, failed: 0, afterRetirement: 0 }, true)).toBeNull();
+    expect(peerMessagesLine({ present: 2, verified: 2, failed: 0, afterRetirement: 0 }, true)).toBe(
       'Peer messages: 2/2 sealed federation messages re-verified under --federation-key.',
     );
-    expect(peerMessagesLine({ present: 3, verified: 0, failed: 0 }, false)).toContain('the peer signatures were not checked');
-    const wrong = peerMessagesLine({ present: 5, verified: 0, failed: 5 }, true)!;
+    expect(peerMessagesLine({ present: 3, verified: 0, failed: 0, afterRetirement: 0 }, false)).toContain('the peer signatures were not checked');
+    const wrong = peerMessagesLine({ present: 5, verified: 0, failed: 5, afterRetirement: 0 }, true)!;
     expect(wrong).toBe('Peer messages: 0/5 re-verified; 5 failed CHAIN_FEDERATION_WIRE_INVALID.');
-    expect(peerMessagesLine({ present: 5, verified: 1, failed: 2 }, true)).toBe(
+    expect(peerMessagesLine({ present: 5, verified: 1, failed: 2, afterRetirement: 0 }, true)).toBe(
       'Peer messages: 1/5 re-verified; 2 failed CHAIN_FEDERATION_WIRE_INVALID; 2 come from a hub with no --federation-key and were hashed and matched to their entry only.',
     );
-    expect(peerMessagesLine({ present: 2, verified: 0, failed: 1 }, false)).toBe(
+    expect(peerMessagesLine({ present: 2, verified: 0, failed: 1, afterRetirement: 0 }, false)).toBe(
       'Peer messages: 0/2 re-verified; 1 failed CHAIN_FEDERATION_WIRE_INVALID; 1 were hashed and matched to their entry only; pass --federation-key <hubId>=<key> for each peer to re-verify them.',
     );
   });
@@ -990,12 +990,37 @@ describe('verify command', () => {
     expect(parseJson(shapeless).suggestion).toContain('<hubId>=<key>');
   });
 
+  it('the peer-message line names messages signed under a key the peer had retired', () => {
+    expect(peerMessagesLine({ present: 2, verified: 2, failed: 0, afterRetirement: 1 }, true)).toBe(
+      'Peer messages: 2/2 sealed federation messages re-verified under --federation-key. 1 of them signed under a key the peer had retired before the receiver took it: in order when the receiver\'s federation.peer_revoked row for the peer comes after them.',
+    );
+  });
+
+  it('--federation-key-history is trusted from the --federation-key for its hub, and refused without one or when altered', () => {
+    const HISTORY = resolve(import.meta.dirname, '../testdata/federation-key-history/succession.json');
+    const doc = JSON.parse(readFileSync(HISTORY, 'utf8')) as { hubId: string; statements: Array<{ payload: string }> };
+    const newest = (JSON.parse(doc.statements[2]!.payload) as { subject: { publicKey: string } }).subject.publicKey;
+    const ok = run(`verify ${VECTORS}/valid.json --federation-key ${doc.hubId}=${newest} --federation-key-history ${HISTORY} --json`);
+    expect(ok.exitCode).toBe(0);
+    const alone = run(`verify ${VECTORS}/valid.json --federation-key-history ${HISTORY} --json`);
+    expect(alone.exitCode).toBe(2);
+    expect(parseJson(alone).message).toContain('no --federation-key names that hub');
+    const dir = mkdtempSync(join(tmpdir(), 'fedhist-'));
+    const altered = structuredClone(doc);
+    altered.statements[1]!.payload = altered.statements[1]!.payload.replace('04:22:03', '04:21:03');
+    writeFileSync(join(dir, 'h.json'), JSON.stringify(altered));
+    const bad = run(`verify ${VECTORS}/valid.json --federation-key ${doc.hubId}=${newest} --federation-key-history ${join(dir, 'h.json')} --json`);
+    expect(bad.exitCode).toBe(2);
+    expect(parseJson(bad).message).toMatch(/--federation-key-history\.statements\[1\].*does not hold/);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   it('an export with no sealed peer message reports federationWire as absent, with or without a key', () => {
     const key = 'MCowBQYDK2VwAyEA' + 'A'.repeat(43) + '=';
     const result = run(`verify ${VECTORS}/valid.json --federation-key hub-b=${key} --json`);
     expect(result.exitCode).toBe(0);
     const out = JSON.parse(result.stdout);
-    expect(out.federationWire).toEqual({ present: 0, verified: 0, failed: 0 });
+    expect(out.federationWire).toEqual({ present: 0, verified: 0, failed: 0, afterRetirement: 0 });
     expect(out.optionalChecks.federation_wire).toBe('skipped_no_input');
   });
 
