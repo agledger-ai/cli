@@ -149,7 +149,7 @@ export default class Verify extends BaseCommand {
         'or base64 of the raw 32 bytes the handshake registered). A receiving Server seals each peer message ' +
         'it accepts on the chain entry it writes (payload.wire), as the peer signed it. Every sealed message is ' +
         'held to its body hash and to its entry; one from a hub given here also has its signature re-verified ' +
-        'under that key, which proves what the peer asserted from this export alone. A failure is ' +
+        'under that key, which checks what the peer asserted from this export alone. A failure is ' +
         'CHAIN_FEDERATION_WIRE_INVALID. Repeatable, once per peer; name a hub twice to pin a second key ' +
         'no succession links to the first: one its history lists linked: false, or one it does not list at all.',
     }),
@@ -468,7 +468,7 @@ export default class Verify extends BaseCommand {
         trust.status === 'no_anchored_signature'
           ? '       Nothing failed, but this is NOT a trusted verdict: the --trust-anchor was walked, but no ' +
               'signature here verified under a key it anchors. An entry written before the install began ' +
-              'signing carries no signature, and proves nothing about who wrote it.\n'
+              'signing carries no signature, and says nothing about who wrote it.\n'
           : '       Nothing failed, but this is NOT a trusted verdict: no --trust-anchor was given, so every ' +
               "signing key was taken on the word of the export itself, and a key planted on the Server " +
               'alone would verify. Ask the operator for the SPKI digest of a vault key (the ' +

@@ -7,8 +7,9 @@ const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 /**
  * Universal pass-through to the AGLedger API.
  *
- * Design principle: the CLI is a thin cover over the API. This command supports
- * every route the API exposes with zero drift, and no hand-coded flag-to-body mapping.
+ * Design principle: the CLI is a thin pass-through to the API. It has no
+ * per-route code, so it reaches every route the API exposes, and it does no
+ * flag-to-body mapping beyond parsing the -F and -f fields.
  *
  * Params go to query string for GET/DELETE, to JSON body for POST/PUT/PATCH.
  * Body sources compose in order: --data (raw JSON) → --input @file / stdin → -F/-f fields.
@@ -16,7 +17,7 @@ const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
  */
 export default class Api extends BaseCommand {
   static override description =
-    'Call any AGLedger API endpoint. Pass-through with zero flag translation: use the exact path and body shape documented in the API (see `agledger discover` or GET /openapi.json).';
+    'Call any AGLedger API endpoint. Pass-through: the request is sent as given, with no per-endpoint flag translation. Use the exact path and body shape documented in the API (see `agledger discover` or GET /openapi.json).';
 
   static override examples = [
     'agledger api GET /health',

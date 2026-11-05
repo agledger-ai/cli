@@ -14,7 +14,7 @@
           "required": true
         }
       },
-      "description": "Call any AGLedger API endpoint. Pass-through with zero flag translation: use the exact path and body shape documented in the API (see `agledger discover` or GET /openapi.json).",
+      "description": "Call any AGLedger API endpoint. Pass-through: the request is sent as given, with no per-endpoint flag translation. Use the exact path and body shape documented in the API (see `agledger discover` or GET /openapi.json).",
       "examples": [
         "agledger api GET /health",
         "agledger api GET /v1/records -F status=ACTIVE -F limit=50",
@@ -811,7 +811,7 @@
           "type": "option"
         },
         "federation-key": {
-          "description": "<hubId>=<key>: a peer Server's Ed25519 federation key as its operator gives it (base64 SPKI DER, or base64 of the raw 32 bytes the handshake registered). A receiving Server seals each peer message it accepts on the chain entry it writes (payload.wire), as the peer signed it. Every sealed message is held to its body hash and to its entry; one from a hub given here also has its signature re-verified under that key, which proves what the peer asserted from this export alone. A failure is CHAIN_FEDERATION_WIRE_INVALID. Repeatable, once per peer; name a hub twice to pin a second key no succession links to the first: one its history lists linked: false, or one it does not list at all.",
+          "description": "<hubId>=<key>: a peer Server's Ed25519 federation key as its operator gives it (base64 SPKI DER, or base64 of the raw 32 bytes the handshake registered). A receiving Server seals each peer message it accepts on the chain entry it writes (payload.wire), as the peer signed it. Every sealed message is held to its body hash and to its entry; one from a hub given here also has its signature re-verified under that key, which checks what the peer asserted from this export alone. A failure is CHAIN_FEDERATION_WIRE_INVALID. Repeatable, once per peer; name a hub twice to pin a second key no succession links to the first: one its history lists linked: false, or one it does not list at all.",
           "name": "federation-key",
           "hasDynamicHelp": false,
           "multiple": true,
