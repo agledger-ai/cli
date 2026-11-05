@@ -790,7 +790,7 @@
           "type": "option"
         },
         "trust-anchor": {
-          "description": "sha256:<64 hex> SPKI digest of a vault key you took out of band (the installer prints the first vault key's; you can derive one as the SHA-256 of the DER-encoded SubjectPublicKeyInfo of the key). The signed key statements the export carries are walked from it: an entry signed by a key the walk does not reach fails CHAIN_SIGNING_KEY_UNANCHORED, and a statement that does not hold fails KEY_STATEMENT_INVALID, KEY_CLOSURE_INVALID or CHAIN_KEY_WINDOW_DRIFT. Without one, a pass rests on keys nobody pinned. Repeatable.",
+          "description": "sha256:<64 hex> SPKI digest of a vault key you took out of band (the installer prints the first vault key's; the Server's signing-key-digest.js derives one from any key you hold). The signed key statements the export carries are walked from it: an entry signed by a key the walk does not reach fails CHAIN_SIGNING_KEY_UNANCHORED, and a statement that does not hold fails KEY_STATEMENT_INVALID, KEY_CLOSURE_INVALID or CHAIN_KEY_WINDOW_DRIFT. Without one, a pass rests on keys nobody pinned. Repeatable.",
           "name": "trust-anchor",
           "hasDynamicHelp": false,
           "multiple": true,
