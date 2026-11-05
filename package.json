@@ -1,7 +1,7 @@
 {
   "name": "@agledger/cli",
   "version": "2.1.0",
-  "description": "AGLedger CLI: the AGLedger API from the command line, for developers and agents. Self-hosted, signed, hash-chained.",
+  "description": "AGLedger CLI: the AGLedger API from the command line, for developers and agents. Self-hosted, signed, hash-chained. Patent pending.",
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "bin": {
