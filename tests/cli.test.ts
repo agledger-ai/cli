@@ -1002,7 +1002,7 @@ describe('verify command', () => {
 
   it('the peer-message line names messages signed under a key the peer had retired', () => {
     expect(peerMessagesLine({ present: 2, verified: 2, failed: 0, afterRetirement: 1 }, true)).toBe(
-      'Peer messages: 2/2 sealed federation messages re-verified under --federation-key. 1 of them signed by the peer under a key it had already retired: in order when the receiver\'s federation.peer_revoked row for the peer comes after them.',
+      'Peer messages: 2/2 sealed federation messages re-verified under --federation-key. 1 of them signed by the peer under a key it had already retired: in order when the receiver\'s federation.peer_revoked entry for the peer comes after them.',
     );
   });
 

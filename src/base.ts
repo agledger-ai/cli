@@ -71,8 +71,8 @@ export const ErrorCode = {
  * was made, so an agent holding only a URL had to shell out to curl for exactly
  * the bootstrap arc the product optimizes for.
  *
- * Read-only by construction: only GET qualifies, so this can never wave through
- * a write. Anything not listed still requires a key, and the Server remains the
+ * Read-only by construction: only GET qualifies, so this can never let
+ * a write through. Anything not listed still requires a key, and the Server remains the
  * authority: a path that starts requiring auth simply answers 401.
  */
 const PUBLIC_GET_PATHS = new Set([
