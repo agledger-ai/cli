@@ -811,14 +811,14 @@
           "type": "option"
         },
         "federation-key": {
-          "description": "<hubId>=<key>: a peer Server's Ed25519 federation key as its operator gives it (base64 SPKI DER, or base64 of the raw 32 bytes the handshake registered). A receiving Server seals each peer message it accepts on the chain entry it writes (payload.wire), as the peer signed it. Every sealed message is held to its body hash and to its entry; one from a hub given here also has its signature re-verified under that key, which proves what the peer asserted from this export alone. A failure is CHAIN_FEDERATION_WIRE_INVALID. Repeatable, once per peer; name a hub twice to pin a second key no succession links to the first (one its history lists linked: false).",
+          "description": "<hubId>=<key>: a peer Server's Ed25519 federation key as its operator gives it (base64 SPKI DER, or base64 of the raw 32 bytes the handshake registered). A receiving Server seals each peer message it accepts on the chain entry it writes (payload.wire), as the peer signed it. Every sealed message is held to its body hash and to its entry; one from a hub given here also has its signature re-verified under that key, which proves what the peer asserted from this export alone. A failure is CHAIN_FEDERATION_WIRE_INVALID. Repeatable, once per peer; name a hub twice to pin a second key no succession links to the first: one its history lists linked: false, or one it does not list at all.",
           "name": "federation-key",
           "hasDynamicHelp": false,
           "multiple": true,
           "type": "option"
         },
         "federation-key-history": {
-          "description": "Path to a peer's federation key history, the JSON its GET /.well-known/agledger-federation-keys.json serves (no auth). Needs a --federation-key for the same hub: every key the history links to that key through successions both keys signed is trusted inside its window, so entries sealed before the peer changed its federation key verify. A message under a key activated after the receiver took it fails; one under a key retired before it is reported as after retirement. Repeatable.",
+          "description": "Path to a peer's federation key history, the JSON its GET /.well-known/agledger-federation-keys.json serves (no auth). Needs a --federation-key for the same hub: every key the history links to that key through successions both keys signed is trusted inside its window, so entries sealed before the peer changed its federation key verify. Each message is placed by its signed wire.timestamp, never by the unsigned createdAt: one signed under a key before the key's activation fails; one signed after its retirement is reported as after retirement. Repeatable.",
           "name": "federation-key-history",
           "hasDynamicHelp": false,
           "multiple": true,
