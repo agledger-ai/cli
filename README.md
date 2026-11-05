@@ -314,3 +314,5 @@ Agent keys (`agl_agt_*`) and admin keys (`agl_adm_*`) are both accepted; the API
 ## License
 
 Proprietary. Copyright (c) 2026 AGLedger LLC. All rights reserved. See [LICENSE](LICENSE).
+
+AGLedger is a trademark of AGLedger LLC. All other trademarks are the property of their respective owners. Patent pending.
