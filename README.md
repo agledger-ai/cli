@@ -161,7 +161,11 @@ OIDC cert sealed on the chain, and `--federation-key <hubId>=<key>` re-verifies
 the messages a federated peer signed and this Server sealed on its
 `FEDERATION_*` entries (`payload.wire`), under the peer's federation key as its
 operator gives it; a sealed message that does not hold fails
-`CHAIN_FEDERATION_WIRE_INVALID`. `--trust-anchor`, `--distrusted-key` and
+`CHAIN_FEDERATION_WIRE_INVALID`. After a peer changes its federation key,
+`--federation-key-history <file>` (the JSON its
+`GET /.well-known/agledger-federation-keys.json` serves) beside the
+`--federation-key` for that hub trusts every key the history links to yours, so
+the entries sealed before the change verify too. `--trust-anchor`, `--distrusted-key` and
 `--federation-key` are given once per key. A malformed value, a distrusted key named twice,
 `--distrusted-key` without `--trust-anchor`, a pinned key distrusted with no
 instant (the Server refuses to start with that pair), and a
