@@ -115,7 +115,7 @@ export default class Verify extends BaseCommand {
       multipleNonGreedy: true,
       description:
         'sha256:<64 hex> SPKI digest of a vault key you took out of band (the installer prints the ' +
-        'first vault key\'s; you can derive one as the SHA-256 of the DER-encoded SubjectPublicKeyInfo of the key). ' +
+        'first vault key\'s; the Server\'s signing-key-digest.js derives one from any key you hold). ' +
         'The signed key statements the export carries are walked from it: an entry signed by a key ' +
         'the walk does not reach fails CHAIN_SIGNING_KEY_UNANCHORED, and a statement that does not ' +
         'hold fails KEY_STATEMENT_INVALID, KEY_CLOSURE_INVALID or CHAIN_KEY_WINDOW_DRIFT. Without ' +
@@ -472,7 +472,7 @@ export default class Verify extends BaseCommand {
           : '       Nothing failed, but this is NOT a trusted verdict: no --trust-anchor was given, so every ' +
               "signing key was taken on the word of the export itself, and a key planted on the Server " +
               'alone would verify. Ask the operator for the SPKI digest of a vault key (the ' +
-              'installer prints it; it is the SHA-256 of the DER-encoded SubjectPublicKeyInfo of the key) and re-run with ' +
+              'installer prints it; signing-key-digest.js derives it from any key) and re-run with ' +
               '--trust-anchor sha256:<hex>.\n',
       );
     }
