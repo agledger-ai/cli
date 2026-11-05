@@ -1,6 +1,11 @@
+---
+name: agledger-cli
+description: Use when an agent needs to record what it was asked to do and what it did, submit completions, read verdicts, or verify audit exports, through the `agledger` CLI against a self-hosted AGLedger Server.
+---
+
 # AGLedger CLI
 
-Thin cover over the AGLedger API. The CLI passes your call through to the API and forwards the response. No flag-to-body translation, no drift.
+Thin pass-through to the AGLedger API. The CLI sends your call to the API as written and forwards the response, with no flag-to-body translation.
 
 ## Setup
 Credentials resolve per command with this precedence: `--api-key` flag > `AGLEDGER_API_KEY` env > `AGLEDGER_OIDC_TOKEN_CMD` > `AGLEDGER_OIDC_TOKEN_FILE` > stored profile (after `agledger login`). API URL: `--api-url` flag > `AGLEDGER_API_URL` env > stored profile URL.
@@ -32,7 +37,7 @@ agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value | -f key
 - `-f key=value`: same, value taken verbatim as a string. Required for identifiers that look numeric (`externalTaskId`, `correlationId`, `platformRef`, `projectRef`, `publisher`): the Server does not coerce a JSON body, so `-F externalTaskId=4821` sends a number and is refused. Do not quote around `-F` to work around it; the quote characters land inside the notarized value.
 
 ## Discovery commands
-- `agledger list-commands --json`: full CLI inventory (10 commands)
+- `agledger list-commands --json`: the CLI-local commands
 - `agledger help-json <command> --json`: per-command schema with args and flags
 - `agledger api GET /openapi.json`: full API route catalog
 
@@ -41,10 +46,10 @@ agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value | -f key
 
 **Read the verdict, not just the exit code.** Without `--trust-anchor` a chain that verifies prints `VERIFIED, NOT ANCHORED`, exits 0, and its JSON carries `keyTrust.status: "no_anchor"`: the signatures were checked against keys nobody pinned, and a key planted on the Server alone would pass. A run with `--trust-anchor` that verified no signature under an anchored key (unsigned history) is also `VERIFIED, NOT ANCHORED`, with `keyTrust.status: "no_anchored_signature"`. Both carry `verdict: "unanchored"`. Only `PASS` (`verdict: "trusted"`, `keyTrust.status: "walked"`) says the keys are linked to one you trust.
 
-**What verification proves:**
-- Every entry was signed by a key listed in the export (or supplied via `--keys`) at the moment the vault wrote it, and, with `--trust-anchor`, that key is linked by signed key statements to the one you pinned (else `CHAIN_SIGNING_KEY_UNANCHORED`).
-- Payloads have not been altered since signing (SHA-256 recomputation matches the hash the entry records for the signed COSE_Sign1 bytes).
-- The hash chain is contiguous: no entries were inserted, removed, or reordered between positions.
+**What verification checks:**
+- Every entry's signature verifies under a key listed in the export (or supplied via `--keys`) and valid at the time the entry was written, and, with `--trust-anchor`, that key is linked by signed key statements to the one you pinned (else `CHAIN_SIGNING_KEY_UNANCHORED`).
+- Payloads match what was signed (the SHA-256 recomputation equals the hash the entry records for the signed COSE_Sign1 bytes).
+- The hash chain is contiguous from the first entry to the last: no entries inserted, removed, or reordered between positions.
 - On failure, `brokenAt.code` is a canonical SCREAMING_SNAKE failure code (e.g. `CHAIN_HASH_MISMATCH`, `CHAIN_SIGNATURE_INVALID`, `CHAIN_SIGNING_KEY_UNANCHORED`, and `KEY_STATEMENT_INVALID`, `KEY_CLOSURE_INVALID`, `CHAIN_KEY_WINDOW_DRIFT`, which are listed under `keyTrust.findings` and are `brokenAt` at position 0 only when the chain itself is intact). A `CHAIN_KEY_WINDOW_DRIFT` whose detail names a `--distrusted-key sha256:<digest>@<instant>` is the export saying the Server distrusts that key from that instant (`distrustedFrom`): its unsigned word, so confirm the instant with the operator before rerunning with that flag.
 
 **What verification does NOT prove:**

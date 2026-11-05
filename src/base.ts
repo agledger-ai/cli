@@ -439,12 +439,10 @@ export abstract class BaseCommand extends Command {
     const { credential, profileName, profile } = this.resolveCredential(flags);
     this.requireNamedProfile(flags, profile);
     const flagUrl = flags['api-url'] || undefined;
-    // Null, not a placeholder. `agledger.example.com` was removed from
-    // `createApiClient`, which now refuses to build a client without a URL, but
-    // this sibling kept it. The whole job of --dry-run is to report what the
-    // real call would do, and it was reporting a host the real call refuses to
-    // use: the unconfigured case printed agledger.example.com and exited 0
-    // while the same invocation without --dry-run exited 2 with CONFIG_ERROR.
+    // Null, not a placeholder host. `createApiClient` refuses to build a client
+    // without a URL, and --dry-run reports what the real call would do, so an
+    // unconfigured run reports `apiUrl: null` and the CONFIG_ERROR the real
+    // call raises (exit 2).
     const apiUrl = flagUrl ?? profile?.apiUrl ?? null;
     const problem = apiUrl === null ? undefined : apiUrlProblem(apiUrl);
 

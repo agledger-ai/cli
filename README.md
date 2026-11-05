@@ -4,7 +4,7 @@ The official CLI for the [AGLedger](https://agledger.ai) API: change control for
 
 Requires an AGLedger Server 2.0 or later. For a 1.x Server, use `npm i -g @agledger/cli@1.5.0`, the last release that supports it.
 
-A **thin cover** over the API. The CLI passes your request straight through to the API and forwards the response: no hand-coded per-endpoint wrappers, no flag-to-body translation, no drift. Every AGLedger API route is reachable via `agledger api <METHOD> <path>`.
+A thin pass-through to the API. The CLI sends your request to the API as written and forwards the response. It has no per-endpoint wrappers and does not translate flags into request bodies, so a route the API adds works without a CLI release. Every AGLedger API route is reachable via `agledger api <METHOD> <path>`. An agent skill file, `SKILL.md`, ships with the package.
 
 **Learn more**
 
@@ -56,18 +56,21 @@ agledger api POST /v1/records \
   -F criteria.summary='deliver 500x copper wire' \
   -F autoActivate=true
 
-# Submit a completion. The principal then renders a Verdict (accept / reject)
-# on the Completion; use the route documented in the API
-# (see `agledger api GET /openapi.json`).
+# Submit a completion. Note the `id` it returns.
 agledger api POST /v1/records/<record-id>/completions \
   --data '{"evidence":{"summary":"delivered 500x copper wire","evidenceUrl":"https://orders.example.com/CW-500"}}'
+
+# The principal agent renders the verdict (accept or reject) on that completion,
+# using its own key. The Record becomes FULFILLED on accept.
+agledger api POST /v1/records/<record-id>/verdict \
+  --data '{"completionId":"<completion-id>","verdict":"accept"}'
 ```
 
-## Why a thin cover?
+## Why a pass-through?
 
-- **Zero drift.** When the API adds, renames, or removes a route, the CLI keeps working, no code change required.
+- **No per-route code.** The CLI holds no list of routes, so it does not need a release when the API adds, renames or removes one.
 - **One mental model.** The API docs are the CLI docs. What you read in the OpenAPI spec is what you type.
-- **Every API route on day one.** You get full parity, not a hand-picked subset.
+- **Every API route.** `agledger api` reaches all of them, not a hand-picked subset.
 
 ## Ways to pass a body
 
@@ -142,8 +145,7 @@ signed. A dated `--distrusted-key` may name a key also given to
 `--trust-anchor`, as the Server documentation's key-compromise guidance does: the pin then
 vouches for what the key signed before the instant. An export accounts for
 nothing a distrusted key signed; such entries fail here, and only a full dump
-verified with `@agledger/verify` lists them as accounted for. An API 2.0
-export lists a key the Server's `VAULT_DISTRUSTED_KEYS` names with
+verified with `@agledger/verify` lists them as accounted for. An export from a Server 2.0 or later lists a key the Server's `VAULT_DISTRUSTED_KEYS` names with
 `distrustedFrom`, the entry's instant, and where that instant is earlier than
 the retirement the key's closures sign, lists the key retired at it. A run
 not given the same entry still fails `CHAIN_KEY_WINDOW_DRIFT` on that window
@@ -165,7 +167,7 @@ operator gives it; a sealed message that does not hold fails
 `--federation-key-history <file>` (the JSON its
 `GET /.well-known/agledger-federation-keys.json` serves) beside the
 `--federation-key` for that hub trusts every key the history links to yours, so
-the entries sealed before the change verify too. `--trust-anchor`, `--distrusted-key` and
+the entries sealed before the change verify too. Federation key histories need a Server 2.2 or later on the peer. `--trust-anchor`, `--distrusted-key` and
 `--federation-key` are given once per key. A malformed value, a distrusted key named twice,
 `--distrusted-key` without `--trust-anchor`, a pinned key distrusted with no
 instant (the Server refuses to start with that pair), and a
@@ -192,7 +194,7 @@ the same as `@agledger/verify`'s `agledger-verify` and the Python
 ## Discovery
 
 ```bash
-agledger list-commands --json          # 10 CLI-local commands
+agledger list-commands --json          # The CLI-local commands
 agledger help-json api --json          # Schema for `api` (args + flags)
 agledger discover                       # Health + identity + quickstart
 agledger api GET /openapi.json          # Full API route catalog
