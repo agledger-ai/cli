@@ -102,7 +102,7 @@ signed and tamper-evident, with an identifier no other system will match.
 
 `agledger verify` checks a Record's audit export with no network and no API
 key: the hash chain, every COSE_Sign1 envelope signature (Ed25519 or ES256),
-and the bindings between the signed bytes and the columns beside them.
+and the bindings between the signed bytes and the fields beside them.
 
 ```bash
 # Save a Record's audit export
@@ -113,7 +113,7 @@ agledger verify audit-export.json --trust-anchor sha256:<digest>
 ```
 
 The keys an export embeds, and the ones `GET /v1/verification-keys` serves,
-come from the Server's database, so a key written into the database alone
+come from the Server, so a key planted on the Server alone
 would verify against them. `--trust-anchor` takes the SPKI digest of a vault
 key you took out of band (the installer prints the first vault key's) and walks
 the signed key statements the export carries from it:
@@ -139,7 +139,7 @@ the signed key statements the export carries from it:
 that instant counts for nothing, and a key statement it signed counts for
 nothing at any instant, because the write times an export carries are not
 signed. A dated `--distrusted-key` may name a key also given to
-`--trust-anchor`, as the Server's key-compromise runbook does: the pin then
+`--trust-anchor`, as the Server documentation's key-compromise guidance does: the pin then
 vouches for what the key signed before the instant. An export accounts for
 nothing a distrusted key signed; such entries fail here, and only a full dump
 verified with `@agledger/verify` lists them as accounted for. An API 2.0

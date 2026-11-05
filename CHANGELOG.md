@@ -4,6 +4,12 @@ All notable changes to the AGLedger CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Help and README text describe the export a caller holds rather than the Server's storage, and no longer point at tooling or documents that are not published.
+
 ## [2.1.0] - 2026-11-05
 
 ### Added
@@ -122,7 +128,7 @@ Targets API 2.0 only. The major version follows the API's. 1.6.0 was never publi
 
 ### Changed
 
-- **`Dry run:` replaces `Dry run —` in the non-JSON header line.** Cosmetic; `--json` output is unaffected.
+- **`Dry run:` replaces the dash form in the non-JSON header line.** Cosmetic; `--json` output is unaffected.
 
 ### Packaging
 
@@ -150,7 +156,7 @@ Targets API 2.0 only. The major version follows the API's. 1.6.0 was never publi
 
 ## [1.2.0] - 2026-08-05
 
-Signing-agility wave 2.
+Signing-algorithm agility.
 
 ### Added
 
@@ -158,7 +164,7 @@ Signing-agility wave 2.
 
 ### Changed
 
-- **Conformance corpus regenerated from API 1.3.4** (export slice, including the ES256 wave).
+- **Conformance corpus regenerated from API 1.3.4** (export slice, including ES256 support).
 
 ## [1.1.0] - 2026-08-05
 
@@ -187,19 +193,18 @@ Docs and tooling. No command, output, or behavior change.
 
 ### Changed
 
-- Docs only: removed em-dashes from the README prose and the package.json description (writing-style sweep). Rewrote each sentence rather than swapping the glyph. No command, output, or behavior change.
 
 ## [1.0.3] - 2026-06-22
 
 ### Fixed
 
-- **`agledger auth` reported not-authenticated right after a successful `login`**. The status check looked only at the `--api-key` flag / `AGLEDGER_API_KEY` env var, ignoring the credential `login` writes to a stored profile in `~/.agledger/config.json` — so the first command a new user runs to confirm setup said it failed when it hadn't. `auth` now resolves the key with the same precedence as every other command (flag → env → active stored profile) and reports the resolving `source` (and `profile`, when applicable). A keyless machine still reports `authenticated: false` with exit 0. Validated end-to-end against a live API v1.0.3.
+- **`agledger auth` reported not-authenticated right after a successful `login`**. The status check looked only at the `--api-key` flag / `AGLEDGER_API_KEY` env var, ignoring the credential `login` writes to a stored profile in `~/.agledger/config.json`, so the first command a new user runs to confirm setup said it failed when it hadn't. `auth` now resolves the key with the same precedence as every other command (flag → env → active stored profile) and reports the resolving `source` (and `profile`, when applicable). A keyless machine still reports `authenticated: false` with exit 0. Validated end-to-end against a live API v1.0.3.
 
 ## [1.0.2] - 2026-06-20
 
 ### Changed
 
-- Bumped `@agledger/verify-core` to `^1.0.0` (now GA at 1.0.0 alongside the API and the published package line). No CLI-surface or behavior changes — the offline `verify` command's logic is unchanged. `oclif.manifest.json` regenerated.
+- Bumped `@agledger/verify-core` to `^1.0.0` (now GA at 1.0.0 alongside the API and the published package line). No CLI-surface or behavior changes: the offline `verify` command's logic is unchanged. `oclif.manifest.json` regenerated.
 
 ## [1.0.1] - 2026-06-10
 
@@ -210,7 +215,7 @@ Docs and tooling. No command, output, or behavior change.
 
 ## [1.0.0] - 2026-06-08
 
-General-availability release, tracking AGLedger API **v1.0.0 GA**. The CLI is a thin pass-through over the API, so the surface is unchanged. **Includes the 0.8.10 fixes below** — 0.8.10 was tagged but never reached npm (its release run failed at the SBOM-pack step before publishing), so those changes ship for the first time here.
+General-availability release, tracking AGLedger API **v1.0.0 GA**. The CLI is a thin pass-through over the API, so the surface is unchanged. **Includes the 0.8.10 fixes below** (0.8.10 was tagged but never reached npm, because its release run failed at the SBOM-pack step before publishing), so those changes ship for the first time here.
 
 ### Fixed
 
@@ -220,7 +225,7 @@ General-availability release, tracking AGLedger API **v1.0.0 GA**. The CLI is a 
 
 ### Fixed
 
-- **Stored login profiles now actually authenticate API calls.** Credentials previously resolved only from the `--api-key` flag / `AGLEDGER_API_KEY` env — the profile written by `agledger login` / `config use` was never read back, so authenticated calls after a login failed with `AUTH_REQUIRED`. Credentials now resolve with precedence **`--api-key` flag > `AGLEDGER_API_KEY` env > stored profile**, and the API URL with **`--api-url` flag > `AGLEDGER_API_URL` env > stored profile URL > default**. `--profile <name>` selects a specific stored profile for any command. `agledger api --dry-run` now echoes the resolved auth (URL, source, masked key).
+- **Stored login profiles now actually authenticate API calls.** Credentials previously resolved only from the `--api-key` flag / `AGLEDGER_API_KEY` env; the profile written by `agledger login` / `config use` was never read back, so authenticated calls after a login failed with `AUTH_REQUIRED`. Credentials now resolve with precedence **`--api-key` flag > `AGLEDGER_API_KEY` env > stored profile**, and the API URL with **`--api-url` flag > `AGLEDGER_API_URL` env > stored profile URL > default**. `--profile <name>` selects a specific stored profile for any command. `agledger api --dry-run` now echoes the resolved auth (URL, source, masked key).
 
 ### Changed
 
@@ -236,7 +241,7 @@ General-availability release, tracking AGLedger API **v1.0.0 GA**. The CLI is a 
 
 ## [0.8.9] - 2026-06-04
 
-No functional change. First release published from CI with **build provenance** via npm trusted publishing (OIDC) — npm attaches a Sigstore provenance attestation automatically; verify with `npm audit signatures`. A CycloneDX SBOM is attached to the release. This package now lives in its own source-of-truth repo `agledger-ai/cli` and resolves `@agledger/verify-core@0.1.4`.
+No functional change. First release published from CI with **build provenance** via npm trusted publishing (OIDC); npm attaches a Sigstore provenance attestation automatically; verify with `npm audit signatures`. A CycloneDX SBOM is attached to the release. This package now lives in its own source-of-truth repo `agledger-ai/cli` and resolves `@agledger/verify-core@0.1.4`.
 
 ## [0.8.8] - 2026-06-02
 
@@ -248,7 +253,7 @@ No functional change. First release published from CI with **build provenance** 
 
 ### Added
 
-- **`agledger docs [--full]`** — fetches the API's agent-oriented documentation narrative (`/llms.txt`, or `/llms-full.txt` with `--full`). `discover` and `list-commands` now point at it.
+- **`agledger docs [--full]`** fetches the API's agent-oriented documentation narrative (`/llms.txt`, or `/llms-full.txt` with `--full`). `discover` and `list-commands` now point at it.
 
 ### Fixed
 
@@ -260,7 +265,7 @@ No functional change. First release published from CI with **build provenance** 
 
 ### Changed
 
-- Republished against `@agledger/verify-core` 0.1.2 — picks up OOB-key polymorphism and the temporal-axis fix. `agledger verify --keys vault-keys.json` now accepts either form of the keys file: the compact `{keyId: SPKI-DER-base64}` map (what the docs showed) OR the natural list shape returned by `GET /v1/verification-keys` (i.e. dump the response's `.data` array to a file and pass it directly). Help text updated.
+- Republished against `@agledger/verify-core` 0.1.2, which picks up OOB-key polymorphism and the temporal-axis fix. `agledger verify --keys vault-keys.json` now accepts either form of the keys file: the compact `{keyId: SPKI-DER-base64}` map (what the docs showed) OR the natural list shape returned by `GET /v1/verification-keys` (i.e. dump the response's `.data` array to a file and pass it directly). Help text updated.
 - Malformed `--keys` files now produce the CLI's structured error envelope (`{code: "INVALID_JSON_INPUT", message, suggestion}` on stderr, exit 2) instead of an unhandled `TypeError` stack trace. Agents parsing stderr can now self-correct rather than asking the user.
 
 ## [0.8.5] - 2026-05-28
@@ -271,7 +276,7 @@ No functional change. First release published from CI with **build provenance** 
 
 ## [0.8.4] - 2026-05-27
 
-Verifier consolidation (Pass 1). `agledger verify` now runs on the shared verification core `@agledger/verify-core` instead of a CLI-local copy — the same hash-chain + COSE_Sign1 + Ed25519 logic the SDK, MCP server, and `@agledger/verify` share.
+Verifier consolidation (Pass 1). `agledger verify` now runs on the shared verification core `@agledger/verify-core` instead of a CLI-local copy; it is the same hash-chain + COSE_Sign1 + Ed25519 logic the SDK, MCP server, and `@agledger/verify` share.
 
 ### Changed
 
@@ -286,7 +291,7 @@ Verifier consolidation (Pass 1). `agledger verify` now runs on the shared verifi
 
 ## [0.8.2] - 2026-05-27
 
-Tracks AGLedger API v0.25.5 (Verify → Gate rename). The CLI is a thin pass-through, so the renamed routes (`/outcome` → `/verdict`, `/verify` → `/evaluate`, `/verification-status` → `/gate-status`) reach `agledger api <METHOD> <path>` automatically — no functional change. The `agledger verify` command (offline COSE_Sign1 audit verification) is cryptographic and unchanged.
+Tracks AGLedger API v0.25.5 (Verify → Gate rename). The CLI is a thin pass-through, so the renamed routes (`/outcome` → `/verdict`, `/verify` → `/evaluate`, `/verification-status` → `/gate-status`) reach `agledger api <METHOD> <path>` automatically, with no functional change. The `agledger verify` command (offline COSE_Sign1 audit verification) is cryptographic and unchanged.
 
 ### Fixed
 
@@ -294,7 +299,7 @@ Tracks AGLedger API v0.25.5 (Verify → Gate rename). The CLI is a thin pass-thr
 
 ## [0.8.1] - 2026-05-21
 
-Tracks AGLedger API v0.24.0. CLI is a thin pass-through, so the v0.24.0 rename sweep (`tenant`/`enterprise` → `org`, account-deactivation split, federation surface trim) lands automatically on `agledger api <METHOD> <path>` — no flag changes. Internal updates:
+Tracks AGLedger API v0.24.0. CLI is a thin pass-through, so the v0.24.0 rename sweep (`tenant`/`enterprise` → `org`, account-deactivation split, federation surface trim) lands automatically on `agledger api <METHOD> <path>`, with no flag changes. Internal updates:
 
 ### Changed
 
@@ -303,19 +308,19 @@ Tracks AGLedger API v0.24.0. CLI is a thin pass-through, so the v0.24.0 rename s
 
 ## [0.8.0] - 2026-05-19
 
-Tracks AGLedger API v0.23.0. SCITT vocabulary alignment + canonical COSE_Sign1 chain envelope cutover. The CLI is a thin pass-through, so most of the wave shows up as text changes — but the offline verifier (`agledger verify`) is a full rewrite.
+Tracks AGLedger API v0.23.0. SCITT vocabulary alignment + canonical COSE_Sign1 chain envelope cutover. The CLI is a thin pass-through, so most of the change shows up as text changes, but the offline verifier (`agledger verify`) is a full rewrite.
 
-### Changed (BREAKING — offline verifier: format 1.0 → 2.0)
+### Changed (BREAKING: offline verifier, format 1.0 → 2.0)
 
 - `agledger verify <export.json>` now decodes canonical COSE_Sign1 envelopes (RFC 9052, tag 18, EdDSA) over in-toto v1 Statement payloads, deterministic CBOR per RFC 8949 §4.2.1. Replaces the JCS + detached-Ed25519 verifier from 0.7.x.
 - Exit codes unchanged (0 = valid, 1 = invalid chain or signature, 2 = usage error).
 - New `EntryFailureReason` values surfaced on the `--json` output: `cose_decode_failed`, `cose_header_mismatch`. Old reasons retained but `signature_invalid` now refers to the COSE_Sign1 signature.
-- `--json` output now carries a `signatureCoverage` discriminator (`{ signed, unsigned, skipped, total }`) so auditors can tell "hash chain valid + 0 entries signed" from "chain valid + every entry signed." Do NOT conclude "Ed25519-verified" from `valid: true` alone — read `signatureCoverage`.
-- New `chainIntegrityReason: "payload_drift"` — emitted when the visible `payload` jsonb diverges from the predicate signed in `coseSign1` (a privileged-DBA-bypass tamper of the denormalized view).
-- The verifier picks up a `cborg` runtime dependency. Same lib the engine uses on the write side — keeps the two implementations byte-compatible.
+- `--json` output now carries a `signatureCoverage` discriminator (`{ signed, unsigned, skipped, total }`) so auditors can tell "hash chain valid + 0 entries signed" from "chain valid + every entry signed." Do NOT conclude "Ed25519-verified" from `valid: true` alone. Read `signatureCoverage` instead.
+- New `chainIntegrityReason: "payload_drift"`, emitted when the visible `payload` diverges from the predicate signed in `coseSign1`.
+- The verifier picks up a `cborg` runtime dependency. Same lib the engine uses on the write side, which keeps the two implementations byte-compatible.
 - Pre-1.0 export-format JSON (`exportFormatVersion: "1.0"`) is rejected with `unsupported_algorithm`. Re-export the chain from a v0.23.0+ engine.
 
-### Changed (text only — Receipt → Completion alignment)
+### Changed (text only: Receipt → Completion alignment)
 
 - `agledger discover` quickstart step 4: "Submit a receipt when done" → "Submit a completion when done"; path `/v1/records/{id}/receipts` → `/v1/records/{id}/completions`.
 - `agledger list-commands` note text: "records, receipts, schemas, webhooks" → "records, completions, schemas, webhooks".
@@ -326,11 +331,11 @@ The CLI is a pure pass-through over `agledger api <METHOD> <path>`, so the API-s
 ## [0.7.2] - 2026-05-02
 
 ### Fixed
-- **`agledger discover` no longer advertises `/docs` unconditionally.** The hardcoded `swaggerUi: 'Your instance serves interactive Swagger UI at /docs.'` line was misleading on instances with `SWAGGER_UI_ENABLED=false` (the production default). API v0.22.17 added a 302 redirect at `/docs` so the URL no longer 404s, but the CLI's discover hint still pointed operators at the wrong place. Customers who need the API reference should hit `GET /openapi.json` (always-on) — already documented in the same response.
+- **`agledger discover` no longer advertises `/docs` unconditionally.** The hardcoded `swaggerUi: 'Your instance serves interactive Swagger UI at /docs.'` line was misleading on instances with `SWAGGER_UI_ENABLED=false` (the production default). API v0.22.17 added a 302 redirect at `/docs` so the URL no longer 404s, but the CLI's discover hint still pointed operators at the wrong place. Customers who need the API reference should hit `GET /openapi.json` (always on), already documented in the same response.
 
 ## [0.7.1] - 2026-04-30
 
-Tracks AGLedger API v0.22.13. Thin pass-through, so no surface changes — `agledger api` reaches all 10 new v0.22.x routes (tenant string overrides, federation gateway status, agents directory, vault checkpoints, dispute withdraw) with no flag work needed.
+Tracks AGLedger API v0.22.13. Thin pass-through, so no surface changes: `agledger api` reaches all 10 new v0.22.x routes (tenant string overrides, federation gateway status, agents directory, vault checkpoints, dispute withdraw) with no flag work needed.
 
 ## [0.7.0] - 2026-04-27
 
