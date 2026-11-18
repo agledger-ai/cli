@@ -161,8 +161,9 @@ export default class Verify extends BaseCommand {
         '(no auth). Needs a --federation-key for the same hub: every key the history links to that key through ' +
         'successions both keys signed is trusted inside its window, so entries sealed before the peer changed its ' +
         'federation key verify. Each message is placed by its signed wire.timestamp, never by the unsigned ' +
-        'createdAt: one signed under a key before the key\'s activation fails; one signed after its retirement is ' +
-        'reported as after retirement. Repeatable.',
+        'createdAt, with 300 seconds allowed at each edge of the window: one signed under a key earlier than that ' +
+        'before the key\'s activation fails; one signed later than that after its retirement is reported as after ' +
+        'retirement. Repeatable.',
     }),
     'require-key-id': Flags.string({
       description:
