@@ -32,7 +32,7 @@
   },
   "dependencies": {
     "@agledger/verify-core": "^2.1.0",
-    "@oclif/core": "^5.0.0"
+    "@oclif/core": "^5.1.12"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.3",
