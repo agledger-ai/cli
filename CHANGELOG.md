@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **`agledger verify` runs on `@agledger/verify-core` 2.2.0 and places a sealed federation message in its key's window with 300 seconds allowed at each edge**, as the Server's receiver guidance gives it: the message's timestamp is the signing process's clock and the window is the peer's database clock. A message signed within that of a key change was failed or reported as after retirement; it now verifies on the key it names. The `--federation-key-history` help says so.
 - `@oclif/core` is 5.1.12 in the lockfile, which takes `minimatch` past its globparts advisory.
 - Help and README text describe the export a caller holds rather than the Server's storage, and no longer point at tooling or documents that are not published.
+- **`agledger verify` fails an export cut from the end.** The export is held to the two entry counts it states: fewer entries than `exportMetadata.expectedEntries`, the position of the record's latest checkpoint, is `CHECKPOINT_ROW_MISSING`, and fewer than `exportMetadata.totalEntries` is `CHAIN_POSITION_GAP`. The human report has an `Entry count` line saying which count the chain was held to, and `--json` carries `entryCount`. An export that verified on 2.1.0 with its tail removed now fails.
+
+### Fixed
+
+- **`npm pack` on an installed copy of the package no longer deletes its `dist/`.** `prepack` ran the build, which begins by clearing `dist/`, and an installed copy has no sources to rebuild from, so packing one (to vendor it, or to mirror it for an air-gapped install) left the package without its code. `prepack` now builds only in a source checkout.
 
 ## [2.1.0] - 2026-11-05
 

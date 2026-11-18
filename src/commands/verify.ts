@@ -504,6 +504,7 @@ export default class Verify extends BaseCommand {
     // Agent signatures are checked only against keys the caller supplies, so
     // the lines below say exactly how many were, and the PASS line speaks for
     // the Server's signatures alone.
+    out.write(`       ${entryCountLine(result.entryCount)}\n`);
     const peerLine = peerMessagesLine(result.federationWire, federationKeysGiven);
     if (peerLine) out.write(`       ${peerLine}\n`);
     const evidenceLine = evidenceBodiesLine(result.evidenceBinding);
@@ -601,4 +602,17 @@ export function peerMessagesLine(
     );
   }
   return `Peer messages: ${parts.join('; ')}.${retired}`;
+}
+
+/**
+ * What the export's entry count was held to. A chain cut from the end still
+ * verifies entry by entry, so the report names the stated count, if any, that
+ * stood behind the number of entries it verified.
+ */
+export function entryCountLine(count: { expectedEntries: number | null; statedEntries: number | null }): string {
+  if (count.expectedEntries !== null) return `Entry count: held to the checkpoint at position ${count.expectedEntries}.`;
+  if (count.statedEntries !== null) {
+    return `Entry count: held to the ${count.statedEntries} the export states; it names no checkpoint for this record yet.`;
+  }
+  return "Entry count: the file's own; the export states no count and names no checkpoint.";
 }

@@ -828,6 +828,20 @@ describe('verify command', () => {
     expect(parsed.brokenAt.code).toBe('CHAIN_HASH_MISMATCH');
   });
 
+  it('exits 1 on an export cut below the checkpoint position it states, and says what the count was held to', () => {
+    const whole = JSON.parse(readFileSync(`${VECTORS}/valid.json`, 'utf-8'));
+    const cut = tmpJson({
+      ...whole,
+      exportMetadata: { ...whole.exportMetadata, totalEntries: 3, expectedEntries: 3 },
+      entries: whole.entries.slice(0, 2),
+    });
+    const result = run(`verify ${cut} --json`);
+    expect(result.exitCode).toBe(1);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.brokenAt).toMatchObject({ position: 3, code: 'CHECKPOINT_ROW_MISSING' });
+    expect(parsed.entryCount).toEqual({ expectedEntries: 3, statedEntries: 3 });
+  });
+
   it('exits 1 on broken chain', () => {
     const result = run(`verify ${VECTORS}/link-broken.json --json`);
     expect(result.exitCode).toBe(1);
@@ -1080,6 +1094,7 @@ describe('verify command', () => {
 
   it('human output says how many agent signatures were checked, and PASS speaks for the Server signatures only', () => {
     const none = human(`verify ${LIVE}/export-cert-lifecycle.json`);
+    expect(none).toMatch(/Entry count: held to the \d+ the export states; it names no checkpoint for this record yet\./);
     expect(none).toContain('Agent signatures: 6 sealed on the chain, not checked. Pass --agent-keys');
     expect(none).toContain('every Server signature verifies');
     expect(none).not.toContain('every signature verified');
