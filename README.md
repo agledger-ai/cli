@@ -66,6 +66,36 @@ agledger api POST /v1/records/<record-id>/verdict \
   --data '{"completionId":"<completion-id>","verdict":"accept"}'
 ```
 
+## Provenance, search filters and the HTML export
+
+These are request fields and query parameters of AGLedger Server 3.0.0, sent through `agledger api` like any other.
+
+```bash
+# Say which model and software produced a record or a completion. Every key is
+# optional; digests are sha256:, sha384: or sha512: hex.
+agledger api POST /v1/records/<record-id>/completions \
+  --data '{"evidence":{"summary":"done"},"producedBy":{"modelProvider":"acme","modelId":"m-1","agentSoftware":"runner","agentSoftwareVersion":"2.4.0"}}'
+
+# Filter by trace id, by producer, or by a numeric bound (-F writes the bracket form
+# criteriaGte[amount]=500; the same pattern covers criteriaGt/Lt/Lte and metadataGt/Gte/Lt/Lte)
+agledger api GET /v1/records/search -F criteriaGte.amount=500 -F producedBy.modelId=m-1
+agledger api GET /v1/records/search -F traceId=<32 lowercase hex> -F originRecordId=<record-id>
+
+# Count records instead of listing them, grouped by up to two comma-joined dimensions
+agledger api GET /v1/records/counts -F groupBy=status,type
+
+# A verdict signed by a named person: `signatureMeaning` is authorship, review,
+# approval or responsibility. It is taken only on an ephemeral OIDC cert; the Server
+# refuses it with 422 on an API key.
+agledger api POST /v1/records/<record-id>/verdict \
+  --data '{"completionId":"<completion-id>","verdict":"accept","signatureMeaning":"approval"}'
+
+# The audit export as a self-contained HTML page, written as the Server sent it
+agledger api GET /v1/records/<record-id>/audit-export -F format=html --output audit.html
+```
+
+A text response (the `html`, `csv` and `ndjson` exports) is printed or written as the Server sent it. Use the default JSON export for `agledger verify`.
+
 ## Why a pass-through?
 
 - **No per-route code.** The CLI holds no list of routes, so it does not need a release when the API adds, renames or removes one.

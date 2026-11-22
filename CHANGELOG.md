@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **`--output <file>` on `agledger api`.** A text response, such as the `html`, `csv` or `ndjson` audit export, is now printed or written exactly as the Server sent it. It was printed as a JSON object wrapping an escaped string. The `format=html` audit export of AGLedger Server 3.0.0 comes out as the page itself.
+- The README shows the request fields and filters of AGLedger Server 3.0.0 through `agledger api`: `producedBy` on a record or completion, `traceId`, `originRecordId`, `producedBy[...]` and the numeric `criteriaGt/Gte/Lt/Lte` and `metadataGt/Gte/Lt/Lte` bounds on search, `GET /v1/records/counts`, and `signatureMeaning` on a verdict (taken only on an ephemeral OIDC cert; the Server refuses it with 422 on an API key). A test holds that object-valued query parameters serialize to the bracket form the Server reads.
+
+### Changed
+
+- `--idempotency-key` help says what a 409 `IDEMPOTENCY_KEY_IN_FLIGHT`, a 409 `IDEMPOTENT_WRITE_COMMITTED` and a 503 `SERVER_SHUTTING_DOWN` ask of the caller.
+
 ## [2.2.0] - 2026-11-18
 
 ### Changed

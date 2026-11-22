@@ -57,6 +57,7 @@ agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value | -f key
 - `--quiet` for exit-code-only operation
 - `--dry-run` on `agledger api` shows the request without sending
 - `--paginate` on GET follows cursors, streams NDJSON
+- `--output <file>` writes the response body to a file; a text response (`format=html|csv|ndjson` audit export) is written exactly as the Server sent it, and printed raw to stdout when no file is given
 - Structured errors on stderr: the CLI's own are `{code, message, suggestion, ...}`; an API error is the Server's RFC 9457 body, verbatim, with its text in `detail`
 - Semantic exit codes (0-10)
 
