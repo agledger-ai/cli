@@ -55,6 +55,29 @@ describe('ApiClient query serialization', () => {
     expect(url).toContain('limit=5');
   });
 
+  it('serializes the numeric bounds and producedBy filters in bracket form', async () => {
+    const mockFetch = stubOk();
+    const client = new ApiClient('https://api.test.com', 'key');
+    await client.request('GET', '/v1/records/search', {
+      query: {
+        criteriaGte: { amount: 500 },
+        metadataLt: { score: '0.5' },
+        producedBy: { modelId: 'm-1', agentSoftware: 'runner' },
+        traceId: '0af7651916cd43dd8448eb211c80319c',
+        originRecordId: '5b1a2f0e-0000-4000-8000-000000000001',
+      },
+    });
+
+    const url = decodeURIComponent(mockFetch.mock.calls[0][0] as string);
+    expect(url).toContain('criteriaGte[amount]=500');
+    expect(url).toContain('metadataLt[score]=0.5');
+    expect(url).toContain('producedBy[modelId]=m-1');
+    expect(url).toContain('producedBy[agentSoftware]=runner');
+    expect(url).toContain('traceId=0af7651916cd43dd8448eb211c80319c');
+    expect(url).toContain('originRecordId=5b1a2f0e');
+    expect(url).not.toContain('[object Object]');
+  });
+
   it('drops null and undefined members rather than sending them', async () => {
     const mockFetch = stubOk();
     const client = new ApiClient('https://api.test.com', 'key');

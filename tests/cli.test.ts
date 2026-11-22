@@ -2032,3 +2032,52 @@ describe('verify flagWording', () => {
     expect(flagWording(from)).toBe(to);
   });
 });
+
+describe('agledger api: text responses', () => {
+  const html = '<!doctype html>\n<html><body>\n<script type="application/json" id="agledger-audit-export">{"a":1}</script>\n</body></html>\n';
+
+  const withServer = async (fn: (apiUrl: string, seen: string[]) => Promise<void>) => {
+    const seen: string[] = [];
+    const server = createServer((req, res) => {
+      seen.push(req.url ?? '');
+      res.setHeader('content-type', 'text/html; charset=utf-8');
+      res.end(html);
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    try {
+      await fn(`http://127.0.0.1:${(server.address() as { port: number }).port}`, seen);
+    } finally {
+      server.close();
+    }
+  };
+
+  const runAsync = async (args: string[]) => {
+    const { promisify } = await import('node:util');
+    return promisify(execFile)('node', [BIN, ...args], {
+      env: { ...process.env, AGLEDGER_OIDC_TOKEN_CMD: '', AGLEDGER_OIDC_TOKEN_FILE: '', HOME: tmpdir() },
+    });
+  };
+
+  it('writes an html audit export to stdout exactly as sent, not JSON-wrapped', async () => {
+    await withServer(async (apiUrl, seen) => {
+      const { stdout } = await runAsync([
+        'api', 'GET', '/v1/records/r1/audit-export', '-F', 'format=html', '--api-url', apiUrl, '--api-key', 'k',
+      ]);
+      expect(stdout).toBe(html);
+      expect(seen[0]).toBe('/v1/records/r1/audit-export?format=html');
+    });
+  });
+
+  it('--output writes the html to a file byte for byte', async () => {
+    await withServer(async (apiUrl) => {
+      const dir = mkdtempSync(join(tmpdir(), 'cli-out-'));
+      const file = join(dir, 'audit.html');
+      const { stdout } = await runAsync([
+        'api', 'GET', '/v1/records/r1/audit-export', '-F', 'format=html', '--output', file, '--api-url', apiUrl, '--api-key', 'k',
+      ]);
+      expect(stdout).toBe('');
+      expect(readFileSync(file, 'utf-8')).toBe(html);
+      rmSync(dir, { recursive: true, force: true });
+    });
+  });
+});

@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import { Args, Flags } from '@oclif/core';
 import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
 import { parseFields, FieldParseError, type FieldInput } from '../util/field-parser.js';
@@ -28,6 +29,9 @@ export default class Api extends BaseCommand {
     'agledger api POST /v1/records --input payload.json',
     'cat payload.json | agledger api POST /v1/records --input -',
     'agledger api GET /v1/records --paginate  # streams all pages as NDJSON',
+    'agledger api GET /v1/records/search -F criteriaGte.amount=500 -F producedBy.modelId=gpt-x  # bracket query: criteriaGte[amount]=500',
+    'agledger api GET /v1/records/counts -F groupBy=status,type  # up to two dimensions',
+    'agledger api GET /v1/records/<record-id>/audit-export -F format=html --output audit.html  # text formats are written as the Server sent them',
   ];
 
   static override args = {
@@ -70,7 +74,11 @@ export default class Api extends BaseCommand {
     }),
     'idempotency-key': Flags.string({
       description:
-        'Dedup key for POST, max 256 chars. One is generated per call and shown by --verbose, and a TIMEOUT or dropped-connection error carries it as `idempotencyKey`. Pass this only when retrying a call that may already have reached the Server: reuse the first attempt\'s key and it replays the original result instead of creating a second record, where a rerun without it can create a duplicate. Bound to method, route and body, so a retry with a changed body is rejected.',
+        'Dedup key for POST, max 256 chars. One is generated per call and shown by --verbose, and a TIMEOUT or dropped-connection error carries it as `idempotencyKey`. Pass this only when retrying a call that may already have reached the Server: reuse the first attempt\'s key and it replays the original result instead of creating a second record, where a rerun without it can create a duplicate. Bound to method, route and body, so a retry with a changed body is rejected. A 409 `IDEMPOTENCY_KEY_IN_FLIGHT` says the first attempt is still running: wait for its Retry-After and rerun with the same key. A 409 `IDEMPOTENT_WRITE_COMMITTED` says it already landed: follow its `refreshUrl` rather than retrying. A 503 `SERVER_SHUTTING_DOWN` is retryable with the same key.',
+    }),
+    output: Flags.string({
+      description:
+        'Write the response body to this file instead of stdout. A text response (the `html`, `csv` or `ndjson` audit export) is written byte for byte as the Server sent it; a JSON response is written pretty-printed.',
     }),
     'dry-run': Flags.boolean({
       description: 'Show the request that would be sent without calling the API.',
@@ -165,7 +173,7 @@ export default class Api extends BaseCommand {
       if (!response.ok) {
         this.handleApiError(response);
       }
-      this.output(response.body);
+      this.emit(response.body, flags.output);
     } catch (err) {
       if (err instanceof FieldParseError) {
         this.failWith(
@@ -176,6 +184,28 @@ export default class Api extends BaseCommand {
         );
       }
       this.handleError(err);
+    }
+  }
+
+  /**
+   * A text response (`format=html|csv|ndjson` on an audit export, `/llms.txt`)
+   * reaches the client as `{ _raw, _contentType }`. Printing that wrapper as JSON
+   * would hand back an escaped string, so the text goes out as the Server sent
+   * it, to stdout or to `--output`. JSON responses print as before.
+   */
+  private emit(body: unknown, outputPath: string | undefined): void {
+    const raw =
+      body !== null && typeof body === 'object' && typeof (body as { _raw?: unknown })._raw === 'string'
+        ? (body as { _raw: string })._raw
+        : undefined;
+    if (outputPath !== undefined) {
+      writeFileSync(outputPath, raw ?? JSON.stringify(body, null, 2) + '\n');
+      return;
+    }
+    if (raw === undefined) {
+      this.output(body);
+    } else if (!this.isQuiet) {
+      process.stdout.write(raw);
     }
   }
 
