@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-18
+
 ### Added
 
 - **`--output <file>` on `agledger api`.** A text response, such as the `html`, `csv` or `ndjson` audit export, is now printed or written exactly as the Server sent it. It was printed as a JSON object wrapping an escaped string. The `format=html` audit export of AGLedger Server 3.0.0 comes out as the page itself.
@@ -13,16 +15,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
-- `--idempotency-key` help says what a 409 `IDEMPOTENCY_KEY_IN_FLIGHT`, a 409 `IDEMPOTENT_WRITE_COMMITTED` and a 503 `SERVER_SHUTTING_DOWN` ask of the caller.
-
-## [2.2.0] - 2026-11-18
-
-### Changed
-
 - **`agledger verify` runs on `@agledger/verify-core` 2.2.0 and places a sealed federation message in its key's window with 300 seconds allowed at each edge**, as the Server's receiver guidance gives it: the message's timestamp is the signing process's clock and the window is the peer's database clock. A message signed within that of a key change was failed or reported as after retirement; it now verifies on the key it names. The `--federation-key-history` help says so.
 - `@oclif/core` is 5.1.12 in the lockfile, which takes `minimatch` past its globparts advisory.
 - Help and README text describe the export a caller holds rather than the Server's storage, and no longer point at tooling or documents that are not published.
 - **`agledger verify` fails an export cut from the end.** The export is held to the two entry counts it states: fewer entries than `exportMetadata.expectedEntries`, the position of the record's latest checkpoint, is `CHECKPOINT_ROW_MISSING`, and fewer than `exportMetadata.totalEntries` is `CHAIN_POSITION_GAP`. The human report has an `Entry count` line saying which count the chain was held to, and `--json` carries `entryCount`. An export that verified on 2.1.0 with its tail removed now fails.
+- `--idempotency-key` help says what a 409 `IDEMPOTENCY_KEY_IN_FLIGHT`, a 409 `IDEMPOTENT_WRITE_COMMITTED` and a 503 `SERVER_SHUTTING_DOWN` ask of the caller.
 
 ### Fixed
 
