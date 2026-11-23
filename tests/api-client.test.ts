@@ -19,9 +19,8 @@ afterEach(() => {
 
 function stubOk() {
   const mockFetch = vi.fn().mockResolvedValueOnce(
-    new Response(JSON.stringify({}), {
+    Response.json({}, {
       status: 200,
-      headers: { 'content-type': 'application/json' },
     }),
   );
   vi.stubGlobal('fetch', mockFetch);

@@ -69,7 +69,7 @@ function relPath(file: string): string {
 
 describe('no emoji in source files', () => {
   // Matches common emoji ranges: skin tones, symbols, pictographs, dingbats
-  const emojiPattern = /[\u{1F300}-\u{1F9FF}\u{2700}-\u{27BF}\u{2600}-\u{26FF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}\u{2705}\u{274C}\u{274E}\u{2728}\u{2734}\u{2744}\u{2747}\u{2757}\u{2763}\u{2764}\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]|[✓✅⚡⏳📋📊❌⚠️✨🔥💡🚀🎉]/gu;
+  const emojiPattern = /[\u{1F300}-\u{1F9FF}\u{2700}-\u{27BF}\u{2600}-\u{26FF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}\u{2705}\u{274C}\u{274E}\u{2728}\u{2734}\u{2744}\u{2747}\u{2757}\u{2763}\u{2764}\u{E0020}-\u{E007F}]|\u{FE0F}|\u{200D}|\u{20E3}|[✓✅⚡⏳📋📊❌✨🔥💡🚀🎉]/gu;
 
   it('should not contain emoji characters', () => {
     const violations: string[] = [];

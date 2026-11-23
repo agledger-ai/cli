@@ -42,7 +42,10 @@ export function readConfig(): Config {
   const path = configPath();
   if (!existsSync(path)) return { profiles: {} };
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8'));
+    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as {
+      profiles?: Record<string, Profile>;
+      activeProfile?: string;
+    };
     return {
       profiles: parsed.profiles ?? {},
       activeProfile: parsed.activeProfile,

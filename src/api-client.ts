@@ -17,6 +17,19 @@ export interface ApiResponse {
  * A Date becomes ISO-8601 rather than the JS locale form, which the date-time
  * query params reject.
  */
+/** A query value as text: a Date as ISO-8601, an array joined by commas, an object as `[object Object]`. */
+function queryText(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.join(',');
+  if (value === null) return 'null';
+  if (typeof value === 'object' || typeof value === 'function') return Object.prototype.toString.call(value);
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint' || typeof value === 'symbol') {
+    return String(value);
+  }
+  return 'undefined';
+}
+
 function appendQueryParam(search: URLSearchParams, key: string, value: unknown): void {
   if (value instanceof Date) {
     search.set(key, value.toISOString());
@@ -25,7 +38,7 @@ function appendQueryParam(search: URLSearchParams, key: string, value: unknown):
   if (Array.isArray(value)) {
     for (const item of value) {
       if (item === undefined || item === null) continue;
-      search.append(key, item instanceof Date ? item.toISOString() : String(item));
+      search.append(key, queryText(item));
     }
     return;
   }
@@ -34,12 +47,12 @@ function appendQueryParam(search: URLSearchParams, key: string, value: unknown):
       if (subValue === undefined || subValue === null) continue;
       search.set(
         `${key}[${sub}]`,
-        subValue instanceof Date ? subValue.toISOString() : String(subValue),
+        queryText(subValue),
       );
     }
     return;
   }
-  search.set(key, String(value));
+  search.set(key, queryText(value));
 }
 
 /**

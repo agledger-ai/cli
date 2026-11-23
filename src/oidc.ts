@@ -90,7 +90,7 @@ const JWT_PATTERN = /eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/g;
 /** Replace anything shaped like a JWT with a placeholder. Token command stderr
  *  and Server error bodies are surfaced to the user, and either can carry one. */
 export function redactTokens(text: string): string {
-  return text.replace(JWT_PATTERN, '<redacted-token>');
+  return text.replaceAll(JWT_PATTERN, '<redacted-token>');
 }
 
 /** Deep-copy a JSON value with every string passed through `redactTokens`,

@@ -58,8 +58,8 @@ jobs:
             exit 1
           fi
 
-      - name: Regenerate oclif manifest
-        run: npm run build && npx oclif manifest
+      - name: Lint
+        run: npm run lint
 
       - name: Typecheck
         run: npm run typecheck
@@ -81,8 +81,8 @@ jobs:
       # below; we still publish from the directory so prepublishOnly gates run.
       - name: Pack tarball (SBOM attestation subject)
         id: pack
-        # `prepack` runs `oclif manifest`, which prints "wrote manifest to …" to
-        # stdout, so `npm pack --silent` emits two lines, so take only the last
+        # `prepack` runs the build, whose script banners go to stdout, so
+        # `npm pack --silent` emits several lines, so take only the last
         # (the tarball filename) or the multiline value breaks $GITHUB_OUTPUT.
         run: echo "tarball=$(npm pack --silent | tail -1)" >> "$GITHUB_OUTPUT"
 

@@ -1138,7 +1138,7 @@ describe('verify command', () => {
       expect(json.stdout).not.toMatch(/distrustedKeys|trustAnchors/);
 
       // A failing run exits 1, which execSync raises; the rendered report rides on the error.
-      let text = '';
+      let text: string;
       let status = 0;
       try {
         text = human(`verify ${X} --trust-anchor ${F}`);
@@ -1149,7 +1149,7 @@ describe('verify command', () => {
       expect(status).toBe(1);
       expect(text).toContain('FAIL  Record:');
       expect(text).toContain('Key finding: CHAIN_KEY_WINDOW_DRIFT (b649db0ec7c5c0fd): retiredAt 2026-10-05T23:03:51.537Z is listed as the Server\'s distrust cutoff');
-      expect(text.replace(/\r?\n\s*/g, ' ')).toContain(advice);
+      expect(text.replaceAll(/\r?\n\s*/g, ' ')).toContain(advice);
       expect(text).not.toMatch(/distrustedKeys|trustAnchors/);
     });
 
@@ -1223,7 +1223,7 @@ describe('verify command', () => {
     ];
     const verdicts = ['trusted', 'unanchored', 'failed'];
     cases.forEach(([args, code, headline], i) => {
-      let stdout = '';
+      let stdout: string;
       let status = 0;
       try {
         stdout = human(args);

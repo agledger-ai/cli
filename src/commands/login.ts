@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { Flags } from '@oclif/core';
+import { Flags } from '../cli/index.js';
 import { ApiClient } from '../api-client.js';
 import { BaseCommand, ErrorCode, ExitCode, argvHasFlag } from '../base.js';
 import { OIDC_ENV, fetchOidcToken } from '../oidc.js';
@@ -19,9 +19,9 @@ export default class Login extends BaseCommand {
     'Verify an API key, or an OIDC token source with --oidc, and store it in ~/.agledger/config.json (0600)';
 
   static override examples = [
-    '<%= config.bin %> login --api-url https://agledger.internal --api-key agl_agt_... --profile prod',
-    "<%= config.bin %> login --oidc --api-url https://agledger.internal --oidc-token-cmd 'gcloud auth print-identity-token --audiences=agledger'",
-    '<%= config.bin %> login --oidc --api-url https://agledger.internal --oidc-token-file /var/run/secrets/tokens/agledger',
+    'agledger login --api-url https://agledger.internal --api-key agl_agt_... --profile prod',
+    "agledger login --oidc --api-url https://agledger.internal --oidc-token-cmd 'gcloud auth print-identity-token --audiences=agledger'",
+    'agledger login --oidc --api-url https://agledger.internal --oidc-token-file /var/run/secrets/tokens/agledger',
   ];
 
   // --profile names the profile this login writes, so it need not exist yet.
@@ -74,7 +74,7 @@ export default class Login extends BaseCommand {
         this.handleApiError(response);
       }
 
-      this.save(flags.profile, { apiKey: apiKey!, apiUrl: flags['api-url'] || undefined });
+      this.save(flags.profile, { apiKey, apiUrl: flags['api-url'] || undefined });
       this.output({ authenticated: true, profile: flags.profile, account: response.body });
     } catch (err) {
       this.handleError(err);
@@ -123,12 +123,12 @@ export default class Login extends BaseCommand {
     // The command outranks the file, as it does at call time.
     const source = command
       ? { kind: 'command' as const, command, origin: argvHasFlag('--oidc-token-cmd') ? '--oidc-token-cmd' : OIDC_ENV.TOKEN_CMD }
-      : { kind: 'file' as const, path: file!, origin: argvHasFlag('--oidc-token-file') ? '--oidc-token-file' : OIDC_ENV.TOKEN_FILE };
+      : { kind: 'file' as const, path: file ?? '', origin: argvHasFlag('--oidc-token-file') ? '--oidc-token-file' : OIDC_ENV.TOKEN_FILE };
     const agentId = flags['oidc-agent-id'] || undefined;
     const stored = {
       apiUrl,
       oidc: {
-        ...(command ? { tokenCommand: command } : { tokenFile: file! }),
+        ...(source.kind === 'command' ? { tokenCommand: source.command } : { tokenFile: source.path }),
         ...(agentId ? { agentId } : {}),
       },
     };
@@ -160,7 +160,7 @@ export default class Login extends BaseCommand {
     this.verboseLog(flags, { event: 'auth', credential: 'oidc-cert', source: source.origin, apiUrl });
 
     try {
-      const client = new ApiClient(apiUrl!, credential, this.config.version);
+      const client = new ApiClient(apiUrl, credential, this.config.version);
       const response = await client.request('GET', '/v1/auth/me');
       if (!response.ok) {
         this.handleApiError(response);

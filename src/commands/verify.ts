@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { Args, Flags } from '@oclif/core';
+import { Args, Flags } from '../cli/index.js';
 import {
   assertNotPinnedAndDistrusted,
   parseDistrustedKeys,
@@ -77,19 +77,17 @@ export default class Verify extends BaseCommand {
     'Verify a record audit export offline (COSE_Sign1 envelope, RFC 9052; Ed25519 or ES256).';
 
   static override examples = [
-    '<%= config.bin %> verify audit-export.json --trust-anchor sha256:<64 hex>',
-    '<%= config.bin %> verify audit-export.json',
-    '<%= config.bin %> verify audit-export.json --keys vault-keys.json',
-    '<%= config.bin %> verify audit-export.json --agent-keys agent-jwks.json',
-    '<%= config.bin %> verify audit-export.json --federation-key hub-b=MCowBQYDK2VwAyEA...',
-    '<%= config.bin %> verify audit-export.json --json',
-    'cat audit-export.json | <%= config.bin %> verify -',
+    'agledger verify audit-export.json --trust-anchor sha256:<64 hex>',
+    'agledger verify audit-export.json',
+    'agledger verify audit-export.json --keys vault-keys.json',
+    'agledger verify audit-export.json --agent-keys agent-jwks.json',
+    'agledger verify audit-export.json --federation-key hub-b=MCowBQYDK2VwAyEA...',
+    'agledger verify audit-export.json --json',
+    'cat audit-export.json | agledger verify -',
   ];
 
-  // FILE is required, but checked in run() rather than by oclif: oclif's own
-  // missing-arg error tells the caller to put arguments before every
-  // repeatable flag, which is not true of non-greedy ones, and lists hidden
-  // flags with them.
+  // FILE is required, but checked in run() rather than by the parser, which
+  // would name the missing argument without the stdin form.
   static override usage = 'verify FILE [--trust-anchor <value>...] [--distrusted-key <value>...] [--keys <value>] [--agent-keys <value>] [--federation-key <value>...] [--require-key-id <value>] [--require-supplied-keys] [--json] [--quiet]';
 
   static override args = {
@@ -310,7 +308,7 @@ export default class Verify extends BaseCommand {
     // verify-core throws TypeError at the supplied-key boundary when the
     // file's shape is wrong (e.g. {keyId: 42}, [null], "...") or a key window
     // in it is not RFC 3339: valid JSON, a value refused. Catch it so the
-    // CLI emits its structured-error envelope rather than oclif's raw
+    // CLI emits its structured-error envelope rather than a raw
     // exception trace; agents parsing stderr need {code, message, suggestion},
     // not a stack frame.
     let result: VerifyExportResult;

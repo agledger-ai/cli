@@ -1,3 +1,3 @@
 #!/usr/bin/env node
-import { execute } from '@oclif/core';
-await execute({ dir: import.meta.url });
+import { main } from '../dist/cli/main.js';
+await main(process.argv.slice(2));

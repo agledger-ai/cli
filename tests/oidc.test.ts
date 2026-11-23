@@ -36,7 +36,7 @@ const commandSource = (jwt = FIXED_JWT): OidcTokenSource => ({
 });
 
 const json = (status: number, body: unknown) =>
-  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+  Response.json(body, { status });
 
 interface Harness {
   fetch: ReturnType<typeof vi.fn>;

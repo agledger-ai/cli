@@ -1,4 +1,4 @@
-import { Args, Flags } from '@oclif/core';
+import { Args, Flags } from '../cli/index.js';
 import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
 import { configPath, readConfig, writeConfig, type Profile } from '../util/config.js';
 
@@ -99,7 +99,7 @@ export default class Config extends BaseCommand {
             'Example: agledger config use prod',
           );
         }
-        if (!config.profiles[target!]) {
+        if (!config.profiles[target]) {
           this.failWith(
             ErrorCode.MISSING_INPUT,
             `Profile '${target}' not found.`,

@@ -12,16 +12,14 @@
     "!dist/**/*.map",
     "bin",
     "LICENSE",
-    "SKILL.md",
-    "oclif.manifest.json"
+    "SKILL.md"
   ],
   "scripts": {
     "prebuild": "rm -rf dist",
     "build": "tsc",
-    "postbuild": "oclif manifest",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist *.tsbuildinfo",
-    "lint": "tsc --noEmit",
+    "lint": "oxlint --type-aware .",
     "pretest": "npm run build",
     "test": "vitest run",
     "deps:lag": "node scripts/dep-lag.mjs",
@@ -31,27 +29,16 @@
     "prepublishOnly": "npm run build && npm run lint:pkg"
   },
   "dependencies": {
-    "@agledger/verify-core": "^2.2.0",
-    "@oclif/core": "^5.0.0"
+    "@agledger/verify-core": "^2.2.0"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.3",
     "@types/node": "^24.0.0",
-    "oclif": "^6.0.8",
+    "oxlint": "1.94.0",
+    "oxlint-tsgolint": "7.0.2007",
     "publint": "^0.3.21",
     "typescript": "^7.0.2",
     "vitest": "^5.0.0"
-  },
-  "oclif": {
-    "bin": "agledger",
-    "commands": {
-      "strategy": "pattern",
-      "target": "./dist/commands"
-    },
-    "hooks": {
-      "command_not_found": "./dist/hooks/command-not-found.js"
-    },
-    "topicSeparator": " "
   },
   "repository": {
     "type": "git",

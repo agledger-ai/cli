@@ -1,7 +1,15 @@
 import { writeFileSync } from 'node:fs';
-import { Args, Flags } from '@oclif/core';
+import { Args, Flags } from '../cli/index.js';
 import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
 import { parseFields, FieldParseError, type FieldInput } from '../util/field-parser.js';
+
+/** Whether a string holds an ASCII control character (U+0000 to U+001F, or U+007F). */
+function hasControlCharacter(text: string): boolean {
+  return [...text].some((c) => {
+    const code = c.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f;
+  });
+}
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -111,7 +119,7 @@ export default class Api extends BaseCommand {
       // Reject control characters before building the request URL. Agent-supplied
       // paths are untrusted input; control chars enable request-line / header
       // injection and never appear in a legitimate API path.
-      if (/[\x00-\x1f\x7f]/.test(args.path)) {
+      if (hasControlCharacter(args.path)) {
         this.failWith(
           ErrorCode.INVALID_PATH,
           'Path contains control characters',

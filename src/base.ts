@@ -5,12 +5,11 @@
  *
  * NO_COLOR (no-color.org): the CLI emits plain JSON to both stdout (results)
  * and stderr (errors) with no ANSI escapes of its own, so it is trivially
- * NO_COLOR-conformant by construction. oclif's own help/error rendering also
- * honors NO_COLOR via chalk's built-in detection, so no explicit check needed.
+ * NO_COLOR-conformant by construction, as is the help text.
  */
 
 import { readFileSync } from 'node:fs';
-import { Command, Errors, Flags } from '@oclif/core';
+import { Command, Flags } from './cli/index.js';
 import { ApiClient } from './api-client.js';
 import type { ApiResponse } from './api-client.js';
 import {
@@ -127,7 +126,7 @@ export function envOnBehalfOfSource(): OidcTokenSource | undefined {
 }
 
 /** Whether a flag was passed on the command line (`--flag value` or `--flag=value`),
- *  as opposed to reaching oclif through its `env` binding. */
+ *  as opposed to reaching the parser through a flag's `env` binding. */
 export function argvHasFlag(flag: string): boolean {
   return process.argv.some((a) => a === flag || a.startsWith(`${flag}=`));
 }
@@ -215,21 +214,6 @@ export abstract class BaseCommand extends Command {
     return process.argv.includes('--quiet');
   }
 
-  /**
-   * oclif's own refusals (an unknown flag, a missing argument, a bad enum
-   * value) reach here before any command code runs. Under --quiet they exit
-   * as a usage error with nothing written, as every other error does; an
-   * explicit `this.exit(code)` passes through untouched, since it already
-   * carries the code the command chose.
-   */
-  protected override async catch(err: Error & { exitCode?: number }): Promise<unknown> {
-    if (this.isQuiet && !(err instanceof Errors.ExitError)) {
-      const exit = (err as { oclif?: { exit?: unknown } }).oclif?.exit;
-      this.exit(typeof exit === 'number' ? exit : ExitCode.GENERAL_ERROR);
-    }
-    return super.catch(err);
-  }
-
   /** Write one diagnostic line to stderr under --verbose. Callers pass no secrets. */
   protected verboseLog(flags: { verbose?: boolean }, event: Record<string, unknown>): void {
     if (flags.verbose) process.stderr.write(JSON.stringify({ verbose: true, ...event }) + '\n');
@@ -239,7 +223,7 @@ export abstract class BaseCommand extends Command {
    * Resolve which credential a command uses, without calling anything.
    *
    * Precedence, highest first:
-   *   1. An API key from `--api-key` or `AGLEDGER_API_KEY` (oclif merges the
+   *   1. An API key from `--api-key` or `AGLEDGER_API_KEY` (the parser merges the
    *      two into `flags['api-key']`).
    *   2. `AGLEDGER_OIDC_TOKEN_CMD`, then `AGLEDGER_OIDC_TOKEN_FILE`.
    *   3. The selected profile (`--profile <name>`, else the active one): its
@@ -550,7 +534,7 @@ export abstract class BaseCommand extends Command {
         suggestion ??
           'Check that the JSON is properly quoted. For complex payloads, use --input <file> instead of --data.',
       );
-      throw new Error('unreachable');
+      throw new Error('unreachable', { cause: err });
     }
   }
 
@@ -572,7 +556,7 @@ export abstract class BaseCommand extends Command {
         // --input, which only the `api` command has.
         suggestion ?? 'Check that the path exists and is readable, or pipe JSON to stdin with --input -.',
       );
-      throw new Error('unreachable');
+      throw new Error('unreachable', { cause: err });
     }
     return this.parseJsonInput(content, path === '-' ? 'stdin' : `${fieldName} ${path}`, suggestion);
   }

@@ -1,4 +1,4 @@
-import { Flags } from '@oclif/core';
+import { Flags } from '../cli/index.js';
 import { BaseCommand } from '../base.js';
 
 /**
@@ -12,9 +12,9 @@ export default class Docs extends BaseCommand {
     "Fetch the API's agent-oriented documentation narrative (llms.txt / llms-full.txt).";
 
   static override examples = [
-    '<%= config.bin %> docs',
-    '<%= config.bin %> docs --full',
-    '<%= config.bin %> docs --full > agledger-llms.txt',
+    'agledger docs',
+    'agledger docs --full',
+    'agledger docs --full > agledger-llms.txt',
   ];
 
   static override flags = {
@@ -40,7 +40,7 @@ export default class Docs extends BaseCommand {
     }
     const text =
       res.body && typeof res.body === 'object' && '_raw' in res.body
-        ? String((res.body as { _raw: unknown })._raw)
+        ? String(res.body._raw)
         : typeof res.body === 'string'
           ? res.body
           : JSON.stringify(res.body, null, 2);

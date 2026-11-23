@@ -1,4 +1,4 @@
-import { Flags } from '@oclif/core';
+import { Flags } from '../cli/index.js';
 import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
 import { readConfig, writeConfig } from '../util/config.js';
 
@@ -7,9 +7,9 @@ export default class Logout extends BaseCommand {
     'Remove a stored profile from ~/.agledger/config.json: the active profile, the one named by --profile, or every profile with --all. Exits 2 when there is no such profile to remove. Removing the active profile leaves none active: pick another with `config use`.';
 
   static override examples = [
-    '<%= config.bin %> logout',
-    '<%= config.bin %> logout --profile prod',
-    '<%= config.bin %> logout --all',
+    'agledger logout',
+    'agledger logout --profile prod',
+    'agledger logout --all',
   ];
 
   static override flags = {
@@ -58,7 +58,7 @@ export default class Logout extends BaseCommand {
       );
     }
 
-    delete config.profiles[name];
+    config.profiles = Object.fromEntries(Object.entries(config.profiles).filter(([profileName]) => profileName !== name));
     // Logging out the active profile leaves none active. Promoting whichever
     // profile came first would quietly switch the next call to a different
     // identity (an admin key, say), so the caller picks one with `config use`.
