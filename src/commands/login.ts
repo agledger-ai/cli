@@ -22,6 +22,7 @@ export default class Login extends BaseCommand {
     'agledger login --api-url https://agledger.internal --api-key agl_agt_... --profile prod',
     "agledger login --oidc --api-url https://agledger.internal --oidc-token-cmd 'gcloud auth print-identity-token --audiences=agledger'",
     'agledger login --oidc --api-url https://agledger.internal --oidc-token-file /var/run/secrets/tokens/agledger',
+    "agledger login --oidc --api-url https://agledger.internal --oidc-token-cmd '...' --agent-keys-file ~/.agledger/agent-keys.json",
   ];
 
   // --profile names the profile this login writes, so it need not exist yet.
@@ -50,6 +51,14 @@ export default class Login extends BaseCommand {
         'CERT_AGENT_BINDING_MISMATCH instead of issuing a cert. To bind an agent, an administrator sets oidcIss/oidcSub ' +
         'on it (PATCH /v1/agents/{id}) or maps an agent_id claim on the trusted issuer (claimMapping.agent_id).',
       env: OIDC_ENV.AGENT_ID,
+    }),
+    'agent-keys-file': Flags.string({
+      description:
+        'With --oidc: a JWK Set file every cert exchange adds its public key to, before the cert is used. Each ' +
+        'command exchanges for a cert with a key pair of its own, and an agent signature can be re-verified ' +
+        'offline only under that key: pass this file to `agledger verify --agent-keys` (or agledger-verify ' +
+        '--agent-keys). Holds public keys only. Stored in the profile.',
+      env: OIDC_ENV.AGENT_KEYS_FILE,
     }),
   };
 
@@ -92,6 +101,7 @@ export default class Login extends BaseCommand {
     'oidc-token-cmd'?: string;
     'oidc-token-file'?: string;
     'oidc-agent-id'?: string;
+    'agent-keys-file'?: string;
   }): Promise<void> {
     if (flags['api-key']) {
       this.failWith(
@@ -128,11 +138,14 @@ export default class Login extends BaseCommand {
       ? { kind: 'command' as const, command, origin: argvHasFlag('--oidc-token-cmd') ? '--oidc-token-cmd' : OIDC_ENV.TOKEN_CMD }
       : { kind: 'file' as const, path: file ?? '', origin: argvHasFlag('--oidc-token-file') ? '--oidc-token-file' : OIDC_ENV.TOKEN_FILE };
     const agentId = flags['oidc-agent-id'] || undefined;
+    // Stored absolute, as the token file is: later commands run from other directories.
+    const agentKeysFile = flags['agent-keys-file'] ? resolve(flags['agent-keys-file']) : undefined;
     const stored = {
       apiUrl,
       oidc: {
         ...(source.kind === 'command' ? { tokenCommand: source.command } : { tokenFile: source.path }),
         ...(agentId ? { agentId } : {}),
+        ...(agentKeysFile ? { agentKeysFile } : {}),
       },
     };
 
@@ -150,6 +163,7 @@ export default class Login extends BaseCommand {
           credential: 'oidc-cert',
           tokenSource: 'file',
           oidcSub: sub,
+          ...(agentKeysFile ? { agentKeysFile } : {}),
           message:
             'The file holds a JWT; it was not exchanged, so the token stays unspent. Run `agledger auth` to exchange it and see the cert.',
         });
@@ -159,7 +173,11 @@ export default class Login extends BaseCommand {
       return;
     }
 
-    const credential = this.oidcCredential(flags, { source, ...(agentId ? { agentId } : {}) });
+    const credential = this.oidcCredential(flags, {
+      source,
+      ...(agentId ? { agentId } : {}),
+      ...(agentKeysFile ? { agentKeysFile } : {}),
+    });
     this.verboseLog(flags, { event: 'auth', credential: 'oidc-cert', source: source.origin, apiUrl });
 
     try {
@@ -176,6 +194,8 @@ export default class Login extends BaseCommand {
         credential: 'oidc-cert',
         tokenSource: 'command',
         cert: credential.cert,
+        publicKeyJwk: credential.publicKeyJwk,
+        ...(agentKeysFile ? { agentKeysFile } : {}),
         account: response.body,
       });
     } catch (err) {

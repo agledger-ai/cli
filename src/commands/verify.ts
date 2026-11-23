@@ -15,6 +15,9 @@ import {
 } from '@agledger/verify-core';
 import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
 
+/** A --trust-anchor was given and the run did not anchor to it; the code `agledger-verify` gives. */
+export const EXIT_NOT_ANCHORED = 3;
+
 /**
  * verify-core words a finding, note or failure for a library caller, so its
  * advice names options (`give distrustedKeys sha256:<hex>@<instant>`, `pin
@@ -34,6 +37,8 @@ const OPTION_FLAGS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bfederationKeys\[\d+\]\.history\b/g, '--federation-key-history'],
   [/\bfederationKeys\[\d+\]/g, '--federation-key'],
   [/\bfederationKeys\b/g, '--federation-key'],
+  [/\ballowAfterRetirement\b/g, '--allow-after-retirement'],
+  [/\bexpectedEntryCount\b/g, '--expected-entry-count'],
 ];
 
 /** One prose string from a result, its option names given as this command's flags. */
@@ -82,13 +87,14 @@ export default class Verify extends BaseCommand {
     'agledger verify audit-export.json --keys vault-keys.json',
     'agledger verify audit-export.json --agent-keys agent-jwks.json',
     'agledger verify audit-export.json --federation-key hub-b=MCowBQYDK2VwAyEA...',
+    'agledger verify audit-export.json --trust-anchor sha256:<64 hex> --expected-entry-count 12',
     'agledger verify audit-export.json --json',
     'cat audit-export.json | agledger verify -',
   ];
 
   // FILE is required, but checked in run() rather than by the parser, which
   // would name the missing argument without the stdin form.
-  static override usage = 'verify FILE [--trust-anchor <value>...] [--distrusted-key <value>...] [--keys <value>] [--agent-keys <value>] [--federation-key <value>...] [--require-key-id <value>] [--require-supplied-keys] [--json] [--quiet]';
+  static override usage = 'verify FILE [--trust-anchor <value>...] [--distrusted-key <value>...] [--keys <value>] [--agent-keys <value>] [--federation-key <value>...] [--federation-key-history <value>...] [--allow-after-retirement] [--expected-entry-count <value>] [--require-key-id <value>] [--require-supplied-keys] [--json] [--quiet]';
 
   static override args = {
     file: Args.string({
@@ -160,8 +166,21 @@ export default class Verify extends BaseCommand {
         'successions both keys signed is trusted inside its window, so entries sealed before the peer changed its ' +
         'federation key verify. Each message is placed by its signed wire.timestamp, never by the unsigned ' +
         'createdAt, with 300 seconds allowed at each edge of the window: one signed under a key earlier than that ' +
-        'before the key\'s activation fails; one signed later than that after its retirement is reported as after ' +
-        'retirement. Repeatable.',
+        'before the key\'s activation fails, and so does one signed later than that after its retirement unless ' +
+        '--allow-after-retirement is given. Repeatable.',
+    }),
+    'allow-after-retirement': Flags.boolean({
+      description:
+        'A sealed peer message signed under a key after that key\'s retirement fails CHAIN_FEDERATION_WIRE_INVALID ' +
+        'by default. This flag accepts it and counts it as after retirement, for a peer that kept signing briefly ' +
+        'after rotating because its process had not restarted.',
+      default: false,
+    }),
+    'expected-entry-count': Flags.string({
+      description:
+        'The number of entries the export must hold, taken out of band (the record\'s entry count from the Server ' +
+        'or an earlier export). The counts an export states about itself are unsigned, so a chain cut from the end ' +
+        'with them deleted verifies; with this flag it fails CHAIN_POSITION_GAP.',
     }),
     'require-key-id': Flags.string({
       description:
@@ -246,6 +265,19 @@ export default class Verify extends BaseCommand {
       }
       throw err;
     }
+    let expectedEntryCount: number | undefined;
+    const countFlag = flags['expected-entry-count'];
+    if (countFlag !== undefined) {
+      if (!/^\d+$/.test(countFlag) || !Number.isSafeInteger(Number(countFlag))) {
+        this.failWith(
+          ErrorCode.INVALID_FIELD,
+          `--expected-entry-count must be a non-negative integer (got ${countFlag})`,
+          ExitCode.USAGE_ERROR,
+          'Pass the number of entries the record holds, as a whole number.',
+        );
+      }
+      expectedEntryCount = Number(countFlag);
+    }
     if (args.file === undefined) {
       this.failWith(
         ErrorCode.MISSING_INPUT,
@@ -320,6 +352,8 @@ export default class Verify extends BaseCommand {
         ...(trustAnchors.length > 0 ? { trustAnchors, distrustedKeys } : {}),
         agentKeys,
         federationKeys,
+        allowAfterRetirement: flags['allow-after-retirement'],
+        ...(expectedEntryCount !== undefined ? { expectedEntryCount } : {}),
       });
     } catch (err) {
       if (err instanceof TypeError) {
@@ -344,10 +378,15 @@ export default class Verify extends BaseCommand {
       const { verdict, ...rest } = result;
       this.output({ verdict, ...rest });
     } else {
-      this.renderHuman(result, agentKeys !== undefined, federationKeys !== undefined);
+      this.renderHuman(result, agentKeys !== undefined, federationKeys !== undefined, expectedEntryCount);
     }
 
-    if (!result.valid) this.exit(ExitCode.GENERAL_ERROR);
+    // The exit codes of @agledger/verify and the Python agledger-verify: 1
+    // only for a failed verdict, and 3 when a pin was given and not met
+    // (nothing fails without it). This command makes no network call, so 3
+    // here never means an auth failure.
+    if (result.verdict === 'failed') this.exit(ExitCode.GENERAL_ERROR);
+    if (result.verdict === 'unanchored' && trustAnchors.length > 0) this.exit(EXIT_NOT_ANCHORED);
   }
 
   /**
@@ -444,7 +483,12 @@ export default class Verify extends BaseCommand {
     );
   }
 
-  private renderHuman(result: VerifyExportResult, agentKeysGiven: boolean, federationKeysGiven: boolean): void {
+  private renderHuman(
+    result: VerifyExportResult,
+    agentKeysGiven: boolean,
+    federationKeysGiven: boolean,
+    expectedEntryCount: number | undefined,
+  ): void {
     if (this.isQuiet) return;
 
     const out = process.stdout;
@@ -456,13 +500,21 @@ export default class Verify extends BaseCommand {
     const verdict = result.verdict;
     const anchored = trust.status === 'walked';
     // The same headline words as @agledger/verify and the Python agledger-verify.
-    const icon = verdict === 'failed' ? 'FAIL' : verdict === 'trusted' ? 'PASS' : 'VERIFIED, NOT ANCHORED';
+    const pinNotMet = verdict === 'unanchored' && !result.valid;
+    const icon = verdict === 'failed' ? 'FAIL' : verdict === 'trusted' ? 'PASS' : pinNotMet ? 'NOT ANCHORED' : 'VERIFIED, NOT ANCHORED';
     out.write(`${icon}  Record: ${result.recordId}\n`);
     out.write(
       `       Entries: ${result.verifiedEntries}/${result.totalEntries} verified\n`,
     );
 
-    if (verdict === 'unanchored') {
+    if (pinNotMet) {
+      out.write(
+        '       The --trust-anchor you gave reaches none of the signing keys here, so every signed entry reads as ' +
+          'unanchored. Without the pin, nothing fails: this is the result for an export from another Server than ' +
+          'the one pinned, and equally for one re-signed wholesale under keys of its own. NOT a trusted verdict. ' +
+          "Check that the pin is this Server's vault key.\n",
+      );
+    } else if (verdict === 'unanchored') {
       out.write(
         trust.status === 'no_anchored_signature'
           ? '       Nothing failed, but this is NOT a trusted verdict: the --trust-anchor was walked, but no ' +
@@ -502,7 +554,7 @@ export default class Verify extends BaseCommand {
     // Agent signatures are checked only against keys the caller supplies, so
     // the lines below say exactly how many were, and the PASS line speaks for
     // the Server's signatures alone.
-    out.write(`       ${entryCountLine(result.entryCount)}\n`);
+    out.write(`       ${entryCountLine(result.entryCount, result.totalEntries, expectedEntryCount)}\n`);
     const peerLine = peerMessagesLine(result.federationWire, federationKeysGiven);
     if (peerLine) out.write(`       ${peerLine}\n`);
     const evidenceLine = evidenceBodiesLine(result.evidenceBinding);
@@ -581,7 +633,7 @@ export function peerMessagesLine(
   if (wire.present === 0) return null;
   const retired =
     wire.afterRetirement > 0
-      ? ` ${wire.afterRetirement} of them signed by the peer under a key it had already retired: in order when the receiver's federation.peer_revoked entry for the peer comes after them.`
+      ? ` ${wire.afterRetirement} of them signed by the peer under a key it had already retired, accepted because --allow-after-retirement was given: in order when the receiver's federation.peer_revoked entry for the peer comes after them.`
       : '';
   if (wire.present === wire.verified) {
     return `Peer messages: ${wire.verified}/${wire.present} sealed federation messages re-verified under --federation-key.${retired}`;
@@ -607,10 +659,19 @@ export function peerMessagesLine(
  * verifies entry by entry, so the report names the stated count, if any, that
  * stood behind the number of entries it verified.
  */
-export function entryCountLine(count: { expectedEntries: number | null; statedEntries: number | null }): string {
+export function entryCountLine(
+  count: { expectedEntries: number | null; statedEntries: number | null },
+  held?: number,
+  supplied?: number,
+): string {
+  if (supplied !== undefined) {
+    return held === supplied
+      ? `Entry count: held to the ${supplied} given with --expected-entry-count.`
+      : `Entry count: ${held ?? 'the chain'} where --expected-entry-count gives ${supplied}.`;
+  }
   if (count.expectedEntries !== null) return `Entry count: held to the checkpoint at position ${count.expectedEntries}.`;
   if (count.statedEntries !== null) {
     return `Entry count: held to the ${count.statedEntries} the export states; it names no checkpoint for this record yet.`;
   }
-  return "Entry count: the file's own; the export states no count and names no checkpoint.";
+  return "Entry count: the file's own; the export states no count and names no checkpoint, so a chain cut from the end would pass. Hold it to a count you took out of band with --expected-entry-count.";
 }

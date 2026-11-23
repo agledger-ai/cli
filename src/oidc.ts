@@ -12,13 +12,16 @@
 
 import { spawn } from 'node:child_process';
 import { createHash, generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
 /** Env vars the CLI reads a token source from. The MCP server reads the same names. */
 export const OIDC_ENV = {
   TOKEN_CMD: 'AGLEDGER_OIDC_TOKEN_CMD',
   TOKEN_FILE: 'AGLEDGER_OIDC_TOKEN_FILE',
   AGENT_ID: 'AGLEDGER_OIDC_AGENT_ID',
+  /** A JWK Set file every cert exchange adds its public key to, for `agledger verify --agent-keys`. */
+  AGENT_KEYS_FILE: 'AGLEDGER_AGENT_KEYS_FILE',
 } as const;
 
 /**
@@ -60,12 +63,84 @@ export class OidcExchangeError extends Error {
   }
 }
 
+/** The agent keys file could not be read or written; nothing was signed under the new key. */
+export class AgentKeysFileError extends Error {
+  constructor(
+    message: string,
+    readonly path: string,
+  ) {
+    super(message);
+    this.name = 'AgentKeysFileError';
+  }
+}
+
+/** An Ed25519 public key as the cert exchange sends it. */
+export interface AgentPublicKeyJwk {
+  kty: 'OKP';
+  crv: 'Ed25519';
+  x: string;
+}
+
+/**
+ * Add one exchanged cert's public key to the JWK Set at `path`, creating the
+ * file if needed. The file is `{ keys: [{ publicKeyJwk, certId, agentId,
+ * issuedAt, expiresAt }, ...] }`, the shape `agledger verify --agent-keys`,
+ * `agledger-verify --agent-keys` and the SDKs' `agentKeys` read. A key already
+ * listed is not added twice. Written through a temp file and a rename, so a
+ * crash never leaves half a file; a file that does not hold a `keys` list is
+ * refused rather than overwritten.
+ */
+export async function recordAgentKey(path: string, entry: { publicKeyJwk: AgentPublicKeyJwk } & Record<string, unknown>): Promise<void> {
+  let doc: { keys: unknown[] } = { keys: [] };
+  let text: string | null = null;
+  try {
+    text = await readFile(path, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw new AgentKeysFileError(`Cannot read the agent keys file ${path} (${(err as NodeJS.ErrnoException).code ?? String(err)}).`, path);
+    }
+  }
+  if (text !== null && text.trim() !== '') {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new AgentKeysFileError(`The agent keys file ${path} is not JSON; it was left as it is.`, path);
+    }
+    if (parsed === null || typeof parsed !== 'object' || !Array.isArray((parsed as { keys?: unknown }).keys)) {
+      throw new AgentKeysFileError(`The agent keys file ${path} does not hold a {"keys": [...]} JWK Set; it was left as it is.`, path);
+    }
+    doc = parsed as { keys: unknown[] };
+  }
+  const x = entry.publicKeyJwk.x;
+  const listed = doc.keys.some((k) => {
+    const jwk = k !== null && typeof k === 'object' && 'publicKeyJwk' in k ? k.publicKeyJwk : k;
+    return jwk !== null && typeof jwk === 'object' && (jwk as { x?: unknown }).x === x;
+  });
+  if (listed) return;
+  doc.keys.push(entry);
+  const temp = join(dirname(path), `.${process.pid}.${Date.now()}.agent-keys.tmp`);
+  try {
+    await writeFile(temp, JSON.stringify(doc, null, 2) + '\n');
+    await rename(temp, path);
+  } catch (err) {
+    await rm(temp, { force: true });
+    throw new AgentKeysFileError(`Cannot write the agent keys file ${path} (${(err as NodeJS.ErrnoException).code ?? String(err)}).`, path);
+  }
+}
+
 /** The `cert` object from a 201 exchange response. Carried verbatim; the CLI reads only the times. */
 export type CertInfo = Record<string, unknown> & { issuedAt?: string; expiresAt?: string };
 
 export interface OidcCertCredentialOptions {
   source: OidcTokenSource;
   agentId?: string;
+  /**
+   * A JWK Set file each exchanged cert's public key is added to before the
+   * cert is used (see {@link recordAgentKey}), so the agent signatures this
+   * CLI seals can be re-verified offline with `--agent-keys`.
+   */
+  agentKeysFile?: string;
   /** Re-exchange once this fraction of the cert's lifetime has passed. Default 0.5. */
   refreshFraction?: number;
   /** Diagnostics sink for --verbose. Never receives a token, cert or key. */
@@ -237,6 +312,7 @@ export async function fetchOidcToken(
 export class OidcCertCredential {
   readonly source: OidcTokenSource;
   private readonly agentId: string | undefined;
+  private readonly agentKeysFile: string | undefined;
   private readonly refreshFraction: number;
   private readonly log: (event: Record<string, unknown>) => void;
   private readonly now: () => number;
@@ -257,6 +333,7 @@ export class OidcCertCredential {
   constructor(options: OidcCertCredentialOptions) {
     this.source = options.source;
     this.agentId = options.agentId || undefined;
+    this.agentKeysFile = options.agentKeysFile || undefined;
     this.refreshFraction = options.refreshFraction ?? 0.5;
     this.log = options.log ?? (() => {});
     this.now = options.now ?? Date.now;
@@ -272,6 +349,15 @@ export class OidcCertCredential {
   /** The cert from the most recent exchange, as the Server returned it. */
   get cert(): CertInfo | null {
     return this.certInfo;
+  }
+
+  /**
+   * The public half of this credential's key pair, as sent at the exchange.
+   * The Server's cert carries only its thumbprint; this is the key
+   * `agledger verify --agent-keys` needs to re-verify what the agent signed.
+   */
+  get publicKeyJwk(): AgentPublicKeyJwk {
+    return { kty: 'OKP', crv: 'Ed25519', x: this.publicKeyX };
   }
 
   /** How many exchanges this credential has performed. */
@@ -338,7 +424,7 @@ export class OidcCertCredential {
     ).toString('base64');
     const body = {
       oidcToken: token,
-      publicKeyJwk: { kty: 'OKP', crv: 'Ed25519', x: this.publicKeyX },
+      publicKeyJwk: this.publicKeyJwk,
       proofOfPossession,
       ...(this.agentId ? { agentId: this.agentId } : {}),
     };
@@ -403,6 +489,17 @@ export class OidcCertCredential {
     // receipt, so a local clock that disagrees with the Server's neither
     // re-exchanges on every request nor holds a cert past its end. A cert
     // whose times do not parse is used for this request and re-exchanged next time.
+    // Recorded before the cert is used, so nothing is signed under a key the
+    // file does not list. A write that fails stops the command here.
+    if (this.agentKeysFile !== undefined) {
+      await recordAgentKey(this.agentKeysFile, {
+        publicKeyJwk: this.publicKeyJwk,
+        certId: out.cert.id,
+        agentId: out.cert.agentId,
+        issuedAt: out.cert.issuedAt,
+        expiresAt: out.cert.expiresAt,
+      });
+    }
     const received = this.now();
     this.refreshAt = lifetime > 0 ? received + this.refreshFraction * lifetime : 0;
     this.expiresAt = lifetime > 0 ? received + lifetime : 0;
@@ -418,6 +515,7 @@ export class OidcCertCredential {
       oidcSub: out.cert.oidcSub,
       issuedAt: out.cert.issuedAt,
       expiresAt: out.cert.expiresAt,
+      ...(this.agentKeysFile !== undefined ? { agentKeysFile: this.agentKeysFile } : {}),
     });
     return out.certJws;
   }

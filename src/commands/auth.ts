@@ -41,7 +41,7 @@ export default class Auth extends BaseCommand {
         credential: auth.credential,
         ...(auth.oidcTokenSource ? { oidcTokenSource: auth.oidcTokenSource } : {}),
         ...(auth.profile ? { profile: auth.profile } : {}),
-        ...(cert ? { cert } : {}),
+        ...(cert ? { cert, publicKeyJwk: client.credential?.publicKeyJwk } : {}),
         account: response.body,
       });
     } catch (err) {

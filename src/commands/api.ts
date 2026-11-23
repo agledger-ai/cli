@@ -136,7 +136,7 @@ export default class Api extends BaseCommand {
       const key = flags['idempotency-key'];
       if (key !== undefined && !(key.length >= 1 && key.length <= MAX_IDEMPOTENCY_KEY_LENGTH && /^[\x20-\x7e]+$/.test(key))) {
         this.failWith(
-          ErrorCode.MISSING_INPUT,
+          ErrorCode.INVALID_FIELD,
           `--idempotency-key must be 1 to ${MAX_IDEMPOTENCY_KEY_LENGTH} printable ASCII characters, with no newline or control character.`,
           ExitCode.USAGE_ERROR,
           'Use a UUID, or any short opaque string unique to this logical operation.',
@@ -146,7 +146,7 @@ export default class Api extends BaseCommand {
       if (flags.output !== undefined) this.requireWritableOutput(flags.output);
       if (flags.paginate && flags.output !== undefined) {
         this.failWith(
-          ErrorCode.INVALID_METHOD,
+          ErrorCode.INVALID_FIELD,
           '--paginate streams NDJSON to stdout and cannot be combined with --output',
           ExitCode.USAGE_ERROR,
           'Redirect the stream instead: agledger api GET <path> --paginate > pages.ndjson',

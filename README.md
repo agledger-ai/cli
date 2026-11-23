@@ -157,11 +157,18 @@ the signed key statements the export carries from it:
   verdict. Either no `--trust-anchor` was given, so nothing links the keys to
   one you trust (`keyTrust.status` is `no_anchor`), or the anchor was walked
   but no signature verified under a key it anchors, as for an export of
-  unsigned history (`no_anchored_signature`). It exits 0, and `--json` output
-  carries `verdict: "unanchored"` for both. Treat it as unverified
-  provenance, not as a clean pass.
-- `FAIL` exits 1. An entry signed by a key the walk does not reach is
-  `CHAIN_SIGNING_KEY_UNANCHORED`; a key statement that does not hold is
+  unsigned history (`no_anchored_signature`). It exits 0 with no
+  `--trust-anchor` and 3 with one, and `--json` output carries
+  `verdict: "unanchored"` for both. Treat it as unverified provenance, not as
+  a clean pass.
+- `NOT ANCHORED` exits 3: the `--trust-anchor` reaches none of the export's
+  keys, so every signed entry reads `CHAIN_SIGNING_KEY_UNANCHORED`, but the
+  export verifies without the pin. That is an export from another Server than
+  the one pinned, or one re-signed wholesale under keys of its own; check the
+  pin. `verdict` is `unanchored` and `valid` is false. This command makes no
+  network call, so here 3 never means an auth failure.
+- `FAIL` exits 1. An entry signed by a key the walk does not reach, beside
+  entries the pin does anchor, is `CHAIN_SIGNING_KEY_UNANCHORED`; a key statement that does not hold is
   `KEY_STATEMENT_INVALID`, `KEY_CLOSURE_INVALID` or `CHAIN_KEY_WINDOW_DRIFT`.
   Those are listed under `keyTrust.findings`, and are `brokenAt` at position 0
   only when the chain itself is intact; when the chain also breaks, `brokenAt`
@@ -197,7 +204,7 @@ operator gives it; a sealed message that does not hold fails
 `--federation-key-history <file>` (the JSON its
 `GET /.well-known/agledger-federation-keys.json` serves) beside the
 `--federation-key` for that hub trusts every key the history links to yours, so
-the entries sealed before the change verify too. Federation key histories need a Server 2.2 or later on the peer. `--trust-anchor`, `--distrusted-key` and
+the entries sealed before the change verify too. Federation key histories need a Server 2.2 or later on the peer. A message the peer signed more than 300 seconds after its key's retirement fails `CHAIN_FEDERATION_WIRE_INVALID`; `--allow-after-retirement` accepts it and counts it, for a peer that kept signing briefly after rotating. The entry counts an export states about itself are unsigned, so an export cut from the end with them deleted still passes; `--expected-entry-count <n>` holds it to a count you took out of band, and a different number of entries fails `CHAIN_POSITION_GAP`. `--trust-anchor`, `--distrusted-key` and
 `--federation-key` are given once per key. A malformed value, a distrusted key named twice,
 `--distrusted-key` without `--trust-anchor`, a pinned key distrusted with no
 instant (the Server refuses to start with that pair), and a
@@ -218,7 +225,7 @@ the same as `@agledger/verify`'s `agledger-verify` and the Python
 - `--paginate` on GET follows cursor pagination and streams NDJSON
 - Every POST carries a generated `Idempotency-Key`, so one invocation is replay-safe on its own. Retrying a call that may already have reached the Server? Pass `--idempotency-key` with the first attempt's key and the Server replays the original result instead of recording the work twice. When a POST times out (exit 10, `TIMEOUT`) or its connection drops after the request went out (exit 9, `NETWORK_ERROR`), the error carries the key it sent as `idempotencyKey` and the suggestion is the rerun: `agledger api POST ... --idempotency-key <key>`. A plain rerun mints a new key and can record the work twice. A GET has no key, and neither does a connection that was refused or never resolved, since nothing was sent
 - Structured errors on stderr: the CLI's own are `{error: true, code, message, suggestion, ...}`; an API error passes through verbatim as the Server's RFC 9457 body, whose human-readable text is `detail`
-- Semantic exit codes: 0 (OK), 1 (general), 2 (usage), 3 (auth), 4 (forbidden), 5 (not found), 6 (conflict), 7 (rate limit), 8 (server), 9 (network), 10 (timeout). **1 is the catch-all**: an API error whose status maps to nothing more specific (a 400, for example) exits 1, as does a chain that fails `agledger verify`. Read the `code` field on stderr to tell them apart, and treat any non-zero as failure rather than keying on 1 alone.
+- Semantic exit codes: 0 (OK), 1 (general), 2 (usage), 3 (auth), 4 (forbidden), 5 (not found), 6 (conflict), 7 (rate limit), 8 (server), 9 (network), 10 (timeout). **1 is the catch-all**: an API error whose status maps to nothing more specific (a 400, for example) exits 1, as does a chain that fails `agledger verify`. `agledger verify` makes no network call and uses 3 for a `--trust-anchor` that was not met (see above). Read the `code` field on stderr to tell them apart, and treat any non-zero as failure rather than keying on 1 alone.
 - `NO_COLOR` supported per [no-color.org](https://no-color.org)
 
 ## Discovery
@@ -284,6 +291,7 @@ its own Server.
 |---|---|
 | `AGLEDGER_OIDC_TOKEN_CMD` | A shell command whose stdout is an OIDC JWT, run on every exchange: `gcloud auth print-identity-token`, `az account get-access-token`, `vault`, `kubectl create token`, or your own script |
 | `AGLEDGER_OIDC_TOKEN_FILE` | A file holding an OIDC JWT, read on every exchange, such as a projected service-account token that Kubernetes rotates on disk. The Server exchanges each token once, so one file token serves one CLI run until the file rotates; for repeated runs, prefer a command that mints a new token |
+| `AGLEDGER_AGENT_KEYS_FILE` | Optional. A JWK Set file each cert exchange adds its public key to before the cert is used (`--agent-keys-file` on `login --oidc` stores it in the profile). Each command signs under a key pair of its own, so this file is how the agent signatures it seals are re-verified offline: `agledger verify export.json --agent-keys <file>`. It holds public keys only |
 | `AGLEDGER_OIDC_AGENT_ID` | Optional. An assertion of the agent id the token binds to, sent on the exchange. It never chooses the agent: when it names a different one, or the token binds none, the Server refuses the exchange with 403 `CERT_AGENT_BINDING_MISMATCH` rather than issue a cert for an agent you did not expect. Leave it unset unless you want that check |
 
 ```bash
@@ -304,7 +312,7 @@ agledger login --oidc --oidc-token-cmd 'gcloud auth print-identity-token --audie
 What the CLI does with it:
 
 - **A fresh token per exchange.** The Server accepts each token id once, so the source is called again for every exchange and a token is never reused or cached.
-- **The key stays in memory.** Each invocation generates an Ed25519 key pair, proves possession of it in the exchange, and discards it on exit. The cert and the key are never written anywhere; `login --oidc` stores only the command or the file path. A token command is verified at login with one exchange; a token file is only checked to hold a JWT, because exchanging it would spend the token the next command needs until the file rotates.
+- **The key stays in memory.** Each invocation generates an Ed25519 key pair, proves possession of it in the exchange, and discards it on exit. The cert and the private key are never written anywhere; the public key is, to `AGLEDGER_AGENT_KEYS_FILE` when you set one, and `login --oidc` and `auth` print it as `publicKeyJwk`; `login --oidc` stores only the command or the file path. A token command is verified at login with one exchange; a token file is only checked to hold a JWT, because exchanging it would spend the token the next command needs until the file rotates.
 - **Signed writes.** Every request with a body carries `X-Agent-Signature` over the SHA-256 of the exact bytes sent, so the chain entry records the agent's own signature in `on_behalf_of.agent_signature`, not only the Server's.
 - **Refresh.** The cert is re-exchanged once half its lifetime has passed, and once more if the Server answers 401 to it, before the error is reported.
 - **Failures name the source.** A token command that exits non-zero fails with `OIDC_TOKEN_SOURCE_FAILED` (exit 3), naming the variable and carrying the command's stderr. A refused exchange fails with `OIDC_EXCHANGE_FAILED` and forwards the Server's error, including its `recoveryHint`.

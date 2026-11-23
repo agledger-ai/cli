@@ -241,6 +241,7 @@ describe('agledger api: --paginate', () => {
       const result = await cli(['api', 'GET', '/v1/records', '--paginate', '--output', join(h, 'o'), '--api-url', url, '--api-key', 'k'], h);
       expect(result.exitCode).toBe(2);
       expect(result.stderr).toContain('--output');
+      expect(errorOf(result).code).toBe('INVALID_FIELD');
       expect(seen).toHaveLength(0);
     });
     rmSync(h, { recursive: true, force: true });
@@ -366,6 +367,7 @@ describe('--idempotency-key', () => {
       );
       expect(result.exitCode, JSON.stringify(key.slice(0, 5))).toBe(2);
       expect(errorOf(result).message).toContain('--idempotency-key');
+      expect(errorOf(result).code).toBe('INVALID_FIELD');
     }
     const ok = await cli(
       ['api', 'POST', '/v1/records', '-F', 'a=1', `--idempotency-key=${'x'.repeat(256)}`, '--dry-run', '--api-url', 'http://127.0.0.1:1', '--api-key', 'k'],

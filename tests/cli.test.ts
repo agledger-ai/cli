@@ -914,10 +914,51 @@ describe('verify command', () => {
     expect(parsed.optionalChecks.key_anchoring).toBe('applied');
   });
 
-  it('fails a key no statement links to the anchor with CHAIN_SIGNING_KEY_UNANCHORED', () => {
+  it('an untampered export pinned on a key nothing links to is not anchored (exit 3), not tampered', () => {
     const result = run(`verify ${VECTORS}/valid.json --trust-anchor sha256:${'ab'.repeat(32)} --json`);
-    expect(result.exitCode).toBe(1);
-    expect(JSON.parse(result.stdout).brokenAt).toMatchObject({ position: 1, code: 'CHAIN_SIGNING_KEY_UNANCHORED' });
+    expect(result.exitCode).toBe(3);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      verdict: 'unanchored',
+      valid: false,
+      brokenAt: { position: 1, code: 'CHAIN_SIGNING_KEY_UNANCHORED' },
+    });
+    // Tampered as well: it fails without the pin, so it keeps the tamper code.
+    expect(run(`verify ${VECTORS}/hash-mismatch.json --trust-anchor sha256:${'ab'.repeat(32)} --json`).exitCode).toBe(1);
+  });
+
+  it('--expected-entry-count fails a tail-cut export whose own counts were deleted, which otherwise passes', () => {
+    const exp = JSON.parse(readFileSync(`${VECTORS}/valid.json`, 'utf8')) as {
+      exportMetadata: Record<string, unknown>;
+      entries: unknown[];
+    };
+    const full = exp.entries.length;
+    exp.entries = exp.entries.slice(0, -1);
+    delete exp.exportMetadata.expectedEntries;
+    delete exp.exportMetadata.totalEntries;
+    const dir = mkdtempSync(join(tmpdir(), 'count-'));
+    const file = join(dir, 'cut.json');
+    writeFileSync(file, JSON.stringify(exp));
+    try {
+      expect(run(`verify ${file} --trust-anchor ${PIN} --json`).exitCode).toBe(0);
+      const held = run(`verify ${file} --trust-anchor ${PIN} --expected-entry-count ${full} --json`);
+      expect(held.exitCode).toBe(1);
+      expect(JSON.parse(held.stdout)).toMatchObject({ brokenAt: { code: 'CHAIN_POSITION_GAP' }, optionalChecks: { entry_count: 'applied' } });
+      expect(run(`verify ${VECTORS}/valid.json --trust-anchor ${PIN} --expected-entry-count ${full} --json`).exitCode).toBe(0);
+      const bad = run(`verify ${file} --expected-entry-count -1 --json`);
+      expect(bad.exitCode).toBe(2);
+      const nonInteger = run(`verify ${file} --expected-entry-count 1.5 --json`);
+      expect(nonInteger.exitCode).toBe(2);
+      expect(parseJson(nonInteger)).toMatchObject({ code: 'INVALID_FIELD', message: '--expected-entry-count must be a non-negative integer (got 1.5)' });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('--allow-after-retirement is accepted, and the help no longer says such messages are only reported', () => {
+    expect(run(`verify ${VECTORS}/valid.json --allow-after-retirement --json`).exitCode).toBe(0);
+    const help = run('verify --help').stdout;
+    expect(help).toContain('--allow-after-retirement');
+    expect(help).not.toContain('is reported as after retirement');
   });
 
   it('a pinned key distrusted with no instant, and --distrusted-key without --trust-anchor, are usage errors', () => {
@@ -1016,7 +1057,7 @@ describe('verify command', () => {
 
   it('the peer-message line names messages signed under a key the peer had retired', () => {
     expect(peerMessagesLine({ present: 2, verified: 2, failed: 0, afterRetirement: 1 }, true)).toBe(
-      'Peer messages: 2/2 sealed federation messages re-verified under --federation-key. 1 of them signed by the peer under a key it had already retired: in order when the receiver\'s federation.peer_revoked entry for the peer comes after them.',
+      'Peer messages: 2/2 sealed federation messages re-verified under --federation-key. 1 of them signed by the peer under a key it had already retired, accepted because --allow-after-retirement was given: in order when the receiver\'s federation.peer_revoked entry for the peer comes after them.',
     );
   });
 
@@ -1217,9 +1258,10 @@ describe('verify command', () => {
     const cases: Array<[string, number, string]> = [
       [`verify ${VECTORS}/valid.json --trust-anchor ${PIN}`, 0, 'PASS  Record:'],
       [`verify ${VECTORS}/valid.json`, 0, 'VERIFIED, NOT ANCHORED  Record:'],
-      [`verify ${VECTORS}/valid.json --trust-anchor sha256:${'ab'.repeat(32)}`, 1, 'FAIL  Record:'],
+      [`verify ${VECTORS}/valid.json --trust-anchor sha256:${'ab'.repeat(32)}`, 3, 'NOT ANCHORED  Record:'],
+      [`verify ${VECTORS}/hash-mismatch.json --trust-anchor ${PIN}`, 1, 'FAIL  Record:'],
     ];
-    const verdicts = ['trusted', 'unanchored', 'failed'];
+    const verdicts = ['trusted', 'unanchored', 'unanchored', 'failed'];
     cases.forEach(([args, code, headline], i) => {
       let stdout: string;
       let status = 0;
@@ -1240,12 +1282,19 @@ describe('verify command', () => {
   it('a pinned run that verified no signature under an anchored key is unanchored, not trusted', () => {
     const unsigned = `${VECTORS}/unsigned.json --keys ${VECTORS}/keys-oob.json --trust-anchor ${PIN}`;
     const json = run(`verify ${unsigned} --json`);
-    expect(json.exitCode).toBe(0);
+    // A pin was asked for and not met: exit 3, as agledger-verify exits.
+    expect(json.exitCode).toBe(3);
     const parsed = JSON.parse(json.stdout);
     expect(parsed.keyTrust.status).toBe('no_anchored_signature');
     expect(parsed.verdict).toBe('unanchored');
 
-    const out = human(`verify ${unsigned}`);
+    let out = '';
+    try {
+      human(`verify ${unsigned}`);
+    } catch (err) {
+      expect((err as { status?: number }).status).toBe(3);
+      out = String((err as { stdout?: string }).stdout);
+    }
     expect(out.startsWith('VERIFIED, NOT ANCHORED  Record:')).toBe(true);
     expect(out).not.toContain('PASS');
     expect(out).toContain('Nothing failed, but this is NOT a trusted verdict: the --trust-anchor was walked, but no signature here verified under a key it anchors.');
@@ -1382,7 +1431,7 @@ describe('verify command: conformance corpus (manifest-export.json)', () => {
       const result = run(`verify ${join(CONFORMANCE, vector.file)}${flagsFor(vector)} --trust-anchor ${anchor} --json`);
       const parsed = JSON.parse(result.stdout) as Parsed;
       const pass = vector.expect === 'pass' && !substituted;
-      expect(result.exitCode).toBe(pass ? 0 : 1);
+      expect(result.exitCode).toBe(pass ? (parsed.keyTrust.status === 'walked' ? 0 : 3) : 1);
       expect(parsed.valid).toBe(pass);
       // Trusted only when a signature verified under an anchored key: a pass
       // over unsigned entries alone is unanchored however the walk went.

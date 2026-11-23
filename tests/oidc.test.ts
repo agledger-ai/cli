@@ -3,13 +3,14 @@
  * 401 retry, and agent body signing. Every network call is a stubbed fetch.
  */
 import { createHash, createPublicKey, verify } from 'node:crypto';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../src/api-client.js';
 import { execSync } from 'node:child_process';
 import {
+  AgentKeysFileError,
   DelegationToken,
   TOKEN_COMMAND_LIMITS,
   OidcCertCredential,
@@ -107,6 +108,41 @@ describe('token source', () => {
 
     // The cert, not the OIDC token, is the bearer.
     expect(authOf(h.apiCalls[0]!)).toBe('Bearer cert-1');
+  });
+
+  it('adds each exchanged cert\'s public key to the agent keys file before the cert is used, once per key', async () => {
+    const h = harness();
+    const dir = mkdtempSync(join(tmpdir(), 'agent-keys-'));
+    const file = join(dir, 'agent-keys.json');
+    try {
+      const first = new OidcCertCredential({ source: commandSource(), agentKeysFile: file });
+      await new ApiClient('https://api.test', first).request('GET', '/v1/auth/me');
+      await new ApiClient('https://api.test', first).request('GET', '/v1/auth/me');
+      const second = new OidcCertCredential({ source: commandSource(), agentKeysFile: file });
+      await new ApiClient('https://api.test', second).request('GET', '/v1/auth/me');
+      const doc = JSON.parse(readFileSync(file, 'utf8')) as { keys: Array<{ publicKeyJwk: { x: string }; certId: string }> };
+      expect(doc.keys.map((k) => k.publicKeyJwk)).toEqual([first.publicKeyJwk, second.publicKeyJwk]);
+      expect(doc.keys[0]!.certId).toBe('cert-id-1');
+      // The key the file lists is the one the exchange sent.
+      expect(h.exchanges[0]!.publicKeyJwk).toEqual(first.publicKeyJwk);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses an agent keys file that is not a JWK Set, before any request is signed under the cert', async () => {
+    const h = harness();
+    const dir = mkdtempSync(join(tmpdir(), 'agent-keys-'));
+    const file = join(dir, 'agent-keys.json');
+    writeFileSync(file, '{"not":"a set"}');
+    try {
+      const credential = new OidcCertCredential({ source: commandSource(), agentKeysFile: file });
+      await expect(new ApiClient('https://api.test', credential).request('GET', '/v1/auth/me')).rejects.toBeInstanceOf(AgentKeysFileError);
+      expect(h.apiCalls).toHaveLength(0);
+      expect(readFileSync(file, 'utf8')).toBe('{"not":"a set"}');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('omits agentId when none is configured', async () => {

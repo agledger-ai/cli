@@ -9,10 +9,12 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Command, ExitError, Flags, beforeTerminator } from './cli/index.js';
 import { ApiClient } from './api-client.js';
 import type { ApiResponse } from './api-client.js';
 import {
+  AgentKeysFileError,
   DelegationToken,
   OIDC_ENV,
   ON_BEHALF_OF_ENV,
@@ -96,7 +98,7 @@ type AuthFlags = { 'api-key'?: string; 'api-url'?: string; profile?: string; ver
 /** Where a command's credential comes from. Never holds a cert or a private key. */
 export type ResolvedCredential =
   | { kind: 'api-key'; key: string; from: 'flag-or-env' | 'profile'; origin: string }
-  | { kind: 'oidc'; source: OidcTokenSource; agentId?: string; from: 'env' | 'profile' }
+  | { kind: 'oidc'; source: OidcTokenSource; agentId?: string; agentKeysFile?: string; from: 'env' | 'profile' }
   | { kind: 'none' };
 
 /** The OIDC token source stored on a profile, if it has one. */
@@ -273,6 +275,8 @@ export abstract class BaseCommand extends Command {
     const profileName = flags.profile ?? config.activeProfile;
     const profile = profileName ? getProfile(config, profileName) : undefined;
     const envAgentId = process.env[OIDC_ENV.AGENT_ID] || undefined;
+    const envKeysPath = process.env[OIDC_ENV.AGENT_KEYS_FILE];
+    const envKeysFile = envKeysPath ? resolve(envKeysPath) : undefined;
 
     // Treat an empty-string flag/env (e.g. AGLEDGER_API_KEY="") as absent so the
     // later sources still apply.
@@ -284,7 +288,13 @@ export abstract class BaseCommand extends Command {
     const fromEnv = envOidcSource();
     if (fromEnv) {
       return {
-        credential: { kind: 'oidc', source: fromEnv, ...(envAgentId ? { agentId: envAgentId } : {}), from: 'env' },
+        credential: {
+          kind: 'oidc',
+          source: fromEnv,
+          ...(envAgentId ? { agentId: envAgentId } : {}),
+          ...(envKeysFile ? { agentKeysFile: envKeysFile } : {}),
+          from: 'env',
+        },
         profileName,
         profile,
       };
@@ -299,8 +309,15 @@ export abstract class BaseCommand extends Command {
     const fromProfile = profileName ? profileOidcSource(profileName, profile) : undefined;
     if (fromProfile) {
       const agentId = envAgentId ?? profile?.oidc?.agentId;
+      const agentKeysFile = envKeysFile ?? profile?.oidc?.agentKeysFile;
       return {
-        credential: { kind: 'oidc', source: fromProfile, ...(agentId ? { agentId } : {}), from: 'profile' },
+        credential: {
+          kind: 'oidc',
+          source: fromProfile,
+          ...(agentId ? { agentId } : {}),
+          ...(agentKeysFile ? { agentKeysFile } : {}),
+          from: 'profile',
+        },
         profileName,
         profile,
       };
@@ -412,11 +429,12 @@ export abstract class BaseCommand extends Command {
   /** Build a cert credential for one invocation. Its key pair never leaves memory. */
   protected oidcCredential(
     flags: { verbose?: boolean },
-    credential: { source: OidcTokenSource; agentId?: string },
+    credential: { source: OidcTokenSource; agentId?: string; agentKeysFile?: string },
   ): OidcCertCredential {
     return new OidcCertCredential({
       source: credential.source,
       ...(credential.agentId ? { agentId: credential.agentId } : {}),
+      ...(credential.agentKeysFile ? { agentKeysFile: credential.agentKeysFile } : {}),
       userAgent: `agledger-cli/${this.config.version}`,
       log: (event) => this.verboseLog(flags, event),
     });
@@ -433,6 +451,7 @@ export abstract class BaseCommand extends Command {
           source: credential.source.origin,
           ...(credential.source.kind === 'file' ? { tokenFile: credential.source.path } : {}),
           ...(credential.agentId ? { agentId: credential.agentId } : {}),
+          ...(credential.agentKeysFile ? { agentKeysFile: credential.agentKeysFile } : {}),
         };
       case 'none':
         return { credential: 'none' };
@@ -639,6 +658,14 @@ export abstract class BaseCommand extends Command {
         err.kind === 'command'
           ? `Run the command in ${err.origin} by hand and check it prints one JWT on stdout and exits 0.`
           : `Check the file named by ${err.origin} exists, is readable, and holds one JWT.`,
+      );
+    }
+    if (err instanceof AgentKeysFileError) {
+      this.failWith(
+        ErrorCode.FILE_WRITE_ERROR,
+        err.message,
+        ExitCode.GENERAL_ERROR,
+        `Fix or move ${err.path} (named by ${OIDC_ENV.AGENT_KEYS_FILE} or the profile's oidc.agentKeysFile), or unset it. Nothing was signed under the new cert.`,
       );
     }
     if (err instanceof OidcExchangeError) {

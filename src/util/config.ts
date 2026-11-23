@@ -16,6 +16,8 @@ export interface OidcProfileSource {
   tokenCommand?: string;
   tokenFile?: string;
   agentId?: string;
+  /** A JWK Set file each cert exchange adds its public key to (absolute). */
+  agentKeysFile?: string;
 }
 
 /** A profile holds an API key or an OIDC token source. */
