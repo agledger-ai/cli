@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
-import { type CliConfig, type CommandClass, ExitError } from './command.js';
+import { allFlags, type CliConfig, type CommandClass, ExitError } from './command.js';
+import type { FlagDef } from './flags.js';
+import { ConfigFileError } from '../util/config.js';
 import { commandHelp, rootHelp, versionLine } from './help.js';
-import { UsageError } from './parse.js';
+import { UsageError, beforeTerminator } from './parse.js';
 
 /**
  * Every command, loaded on demand so `agledger verify` does not pay for the
@@ -99,69 +101,126 @@ function finish(code: number): void {
   });
 }
 
+/** Flags a user may type to ask for help, and the word that does the same. */
+const HELP_WORD = 'help';
+
+/**
+ * Whether argv asks for help: `--help` or `-h` before any `--`, and not as the
+ * value of a flag that takes one (`--data --help` sends the text `--help`).
+ */
+function requestsHelp(argv: readonly string[], flags: Record<string, FlagDef>): boolean {
+  const takesValue = (name: string): boolean => flags[name]?.type === 'option';
+  const byChar = new Map(Object.entries(flags).flatMap(([name, def]) => (def.char ? [[def.char, name] as const] : [])));
+  for (let i = 0; i < argv.length; i++) {
+    const token = argv[i] ?? '';
+    if (token === '--') return false;
+    if (token === '--help' || token === '-h') return true;
+    if (token.startsWith('--')) {
+      if (!token.includes('=') && takesValue(token.slice(2))) i++;
+    } else if (token.length === 2 && token.startsWith('-')) {
+      const name = byChar.get(token.slice(1));
+      if (name !== undefined && takesValue(name)) i++;
+    }
+  }
+  return false;
+}
+
+function writeUsageError(commandId: string, message: string): void {
+  process.stderr.write(
+    JSON.stringify({
+      error: true,
+      code: 'USAGE_ERROR',
+      message,
+      suggestion: `Run \`agledger ${commandId} --help\` to see usage.`,
+    }) + '\n',
+  );
+}
+
 /**
  * The entry point: `--version`, `--help`, command lookup and dispatch. Exit
  * codes: a command's own through `exit()`, 2 for a command line the parser
  * refuses or a command that does not exist, 1 for anything unexpected.
+ *
+ * Global flags may come before the command (`agledger --json api GET /health`):
+ * the command is the first word that names one, and what surrounds it is the
+ * command's own argv.
  */
 export async function main(argv: readonly string[]): Promise<void> {
   const config = loadConfig();
-  const quiet = argv.includes('--quiet');
+  const flagArgs = beforeTerminator(argv);
+  const quiet = flagArgs.includes('--quiet');
   const first = argv[0];
+
+  // A reader that closed the pipe (`| head -1`) has what it wanted.
+  process.stdout.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EPIPE') process.exit(0);
+    throw err;
+  });
 
   if (first === '--version') {
     process.stdout.write(`${versionLine(config)}\n`);
     return;
   }
 
-  const terminator = argv.indexOf('--');
-  const wantsHelp = (terminator === -1 ? argv : argv.slice(0, terminator)).includes('--help');
-  // `agledger --help api` names the command after the flag; a bare `agledger` or
-  // `agledger --help` names none and gets the root help.
-  const commandId = first?.startsWith('-') ? argv.find((a) => Object.hasOwn(COMMANDS, a)) : first;
+  const isCommandWord = (a: string): boolean => Object.hasOwn(COMMANDS, a) || a === HELP_WORD;
+  const index = first === undefined ? -1 : first.startsWith('-') ? flagArgs.findIndex(isCommandWord) : 0;
+  const commandId = index === -1 ? undefined : argv[index];
+  const rest = index === -1 ? [...argv] : [...argv.slice(0, index), ...argv.slice(index + 1)];
+  const loadAll = async (): Promise<Record<string, CommandClass>> =>
+    Object.fromEntries(
+      await Promise.all(Object.keys(COMMANDS).map(async (name) => [name, (await loadCommand(name)) as CommandClass] as const)),
+    );
 
   if (commandId === undefined) {
-    if (first !== undefined && !wantsHelp) {
+    // A bare `agledger` or `agledger --help` gets the root help; anything else names no command.
+    if (first !== undefined && !requestsHelp(argv, {})) {
       if (!quiet) process.stderr.write(commandNotFound(first) + '\n');
       finish(2);
       return;
     }
-    const commands = Object.fromEntries(
-      await Promise.all(
-        Object.keys(COMMANDS).map(async (name) => [name, await loadCommand(name)] as const),
-      ),
-    );
-    process.stdout.write(rootHelp(config, commands as Record<string, CommandClass>));
+    process.stdout.write(rootHelp(config, await loadAll()));
     return;
   }
 
-  const command = await loadCommand(commandId);
+  // `agledger help [command]`
+  const target = commandId === HELP_WORD ? rest.find((a) => !a.startsWith('-')) : commandId;
+  if (target === undefined) {
+    process.stdout.write(rootHelp(config, await loadAll()));
+    return;
+  }
+
+  const command = await loadCommand(target);
   if (command === undefined) {
-    if (!quiet) process.stderr.write(commandNotFound(commandId) + '\n');
+    if (!quiet) process.stderr.write(commandNotFound(target) + '\n');
     finish(2);
     return;
   }
 
-  if (wantsHelp) {
-    process.stdout.write(commandHelp(config, commandId, command));
+  if (commandId === HELP_WORD || requestsHelp(rest, allFlags(command))) {
+    process.stdout.write(commandHelp(config, target, command));
     return;
   }
 
   try {
-    await new command(argv.slice(1), config).run();
+    await new command(rest, config).run();
   } catch (err) {
     if (err instanceof ExitError) {
       if (err.exitCode !== 0) finish(err.exitCode);
       return;
     }
     if (err instanceof UsageError) {
+      if (!quiet) writeUsageError(commandId, err.message);
+      finish(2);
+      return;
+    }
+    if (err instanceof ConfigFileError) {
       if (!quiet) {
         process.stderr.write(
           JSON.stringify({
             error: true,
-            code: 'USAGE_ERROR',
+            code: 'CONFIG_ERROR',
             message: err.message,
-            suggestion: `Run \`agledger ${commandId} --help\` to see usage.`,
+            suggestion: `Fix or remove ${err.path}. It is never overwritten while it cannot be read, so the profiles in it are kept.`,
           }) + '\n',
         );
       }

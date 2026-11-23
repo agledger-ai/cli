@@ -11,7 +11,7 @@ import { BaseCommand } from '../base.js';
 export default class ListCommands extends BaseCommand {
   static override description = 'List all CLI commands (for agent discovery). Most API work goes through `agledger api`.';
 
-  static override flags = { ...BaseCommand.baseFlags };
+  static override flags = { ...BaseCommand.offlineFlags };
 
   async run(): Promise<void> {
     await this.parse(ListCommands);

@@ -109,7 +109,7 @@ A text response (the `html`, `csv` and `ndjson` exports) is printed or written a
 | `--data '{...}'` | Agent-friendly: one JSON string |
 | `--input file.json` | Complex payloads; reuse files |
 | `--input -` | Pipe JSON from stdin |
-| `-F key=value` (repeatable) | Shell-friendly; typed (`true`/`false`/`null`/numbers); nested via `a.b=v`; arrays via `arr[]=v`; JSON literals via `k={...}` / `k=[...]` |
+| `-F key=value` (repeatable) | Shell-friendly; typed (`true`/`false`/`null`, and numbers that print back as typed, so `0123` and `-0` stay strings); nested via `a.b=v`; arrays via `arr[]=v`; JSON literals via `k={...}` / `k=[...]` |
 | `-f key=value` (repeatable) | Same, but the value is taken verbatim as a string |
 
 Merging order (low → high): `--data` → `--input` → `-F`/`-f` → `--query`. Later sources override earlier keys.

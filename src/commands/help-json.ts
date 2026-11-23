@@ -8,7 +8,7 @@ export default class HelpJson extends BaseCommand {
   static override args = {
     command: Args.string({ description: 'CLI command name (e.g., "api", "discover", "login")', required: true }),
   };
-  static override flags = { ...BaseCommand.baseFlags };
+  static override flags = { ...BaseCommand.offlineFlags };
 
   async run(): Promise<void> {
     const { args } = await this.parse(HelpJson);

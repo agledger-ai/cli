@@ -33,7 +33,7 @@ agledger api <METHOD> <PATH> [--data JSON | --input FILE | -F key=value | -f key
 - `--data '{"k":"v"}'`: raw JSON string (agent-friendly)
 - `--input file.json`: read JSON from file
 - `--input -`: read JSON from stdin
-- `-F key=value`: repeatable; types parsed (`true`/`false`/`null`/numbers); nested via `a.b=v`; arrays via `arr[]=v`
+- `-F key=value`: repeatable; types parsed (`true`/`false`/`null`/numbers that print back as typed, so `0123` stays a string); nested via `a.b=v`; arrays via `arr[]=v`
 - `-f key=value`: same, value taken verbatim as a string. Required for identifiers that look numeric (`externalTaskId`, `correlationId`, `platformRef`, `projectRef`, `publisher`): the Server does not coerce a JSON body, so `-F externalTaskId=4821` sends a number and is refused. Do not quote around `-F` to work around it; the quote characters land inside the notarized value.
 
 ## Discovery commands

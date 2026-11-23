@@ -9,7 +9,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { Command, Flags } from './cli/index.js';
+import { Command, ExitError, Flags, beforeTerminator } from './cli/index.js';
 import { ApiClient } from './api-client.js';
 import type { ApiResponse } from './api-client.js';
 import {
@@ -21,7 +21,7 @@ import {
   OidcTokenSourceError,
   type OidcTokenSource,
 } from './oidc.js';
-import { readConfig, type Profile } from './util/config.js';
+import { ConfigFileError, getProfile, readConfig, type Profile } from './util/config.js';
 
 /** Semantic exit codes for agent consumption. Stable across releases. */
 export const ExitCode = {
@@ -59,6 +59,10 @@ export const ErrorCode = {
   INVALID_METHOD: 'INVALID_METHOD',
   INVALID_FIELD: 'INVALID_FIELD',
   FILE_READ_ERROR: 'FILE_READ_ERROR',
+  /** The `--output` file cannot be written. */
+  FILE_WRITE_ERROR: 'FILE_WRITE_ERROR',
+  /** `--paginate` on a response that is not a list. */
+  NOT_PAGINATED: 'NOT_PAGINATED',
   TIMEOUT: 'TIMEOUT',
   NETWORK_ERROR: 'NETWORK_ERROR',
   UNKNOWN_ERROR: 'UNKNOWN_ERROR',
@@ -128,7 +132,7 @@ export function envOnBehalfOfSource(): OidcTokenSource | undefined {
 /** Whether a flag was passed on the command line (`--flag value` or `--flag=value`),
  *  as opposed to reaching the parser through a flag's `env` binding. */
 export function argvHasFlag(flag: string): boolean {
-  return process.argv.some((a) => a === flag || a.startsWith(`${flag}=`));
+  return beforeTerminator(process.argv).some((a) => a === flag || a.startsWith(`${flag}=`));
 }
 
 /**
@@ -146,7 +150,15 @@ export function apiUrlProblem(url: string): string | undefined {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return `has scheme '${parsed.protocol}', and only http: and https: are supported`;
   }
+  if (parsed.username !== '' || parsed.password !== '') {
+    return 'carries credentials in the URL, which are not accepted (pass the key with --api-key or AGLEDGER_API_KEY)';
+  }
   return undefined;
+}
+
+/** A URL with anything before an `@` in its authority masked, so a password never reaches a message. */
+export function redactUrl(url: string): string {
+  return url.replace(/(\/\/)[^/?#@\s]*@/, '$1<redacted>@');
 }
 
 /** Where the API URL in use came from, for a CONFIG_ERROR that has to name it. */
@@ -189,7 +201,7 @@ export abstract class BaseCommand extends Command {
   /** The Idempotency-Key the most recent POST went out under, so a timeout or a
    *  dropped connection can hand it back for the retry. Undefined for any other
    *  method: the API ignores the header there, so there is no key to claim. */
-  private sentIdempotencyKey?: string;
+  protected sentIdempotencyKey?: string;
 
   static baseFlags = {
     json: Flags.boolean({ description: 'Force JSON output (default when stdout is piped)', default: false }),
@@ -206,12 +218,34 @@ export abstract class BaseCommand extends Command {
     }),
   };
 
+  /**
+   * The base flags for a command that makes no API call: the credential flags
+   * stay accepted (a script may pass them to every command) but are left out of --help.
+   */
+  static offlineFlags = {
+    json: BaseCommand.baseFlags.json,
+    quiet: BaseCommand.baseFlags.quiet,
+    'api-key': { ...BaseCommand.baseFlags['api-key'], hidden: true },
+    'api-url': { ...BaseCommand.baseFlags['api-url'], hidden: true },
+    profile: { ...BaseCommand.baseFlags.profile, hidden: true },
+    verbose: { ...BaseCommand.baseFlags.verbose, hidden: true },
+  };
+
   protected get isJson(): boolean {
-    return process.argv.includes('--json') || !process.stdout.isTTY;
+    return this.parsedOutputFlags().json || !process.stdout.isTTY;
   }
 
   protected get isQuiet(): boolean {
-    return process.argv.includes('--quiet');
+    return this.parsedOutputFlags().quiet;
+  }
+
+  /** --json and --quiet as the parser read them, so a value such as `--data --quiet` is not a flag. */
+  private parsedOutputFlags(): { json: boolean; quiet: boolean } {
+    const flags = this.parsedFlags;
+    if (flags) return { json: flags.json === true, quiet: flags.quiet === true };
+    // Before parsing (or when parsing refused the line) the best reading is the raw argv.
+    const argv = beforeTerminator(this.argv);
+    return { json: argv.includes('--json'), quiet: argv.includes('--quiet') };
   }
 
   /** Write one diagnostic line to stderr under --verbose. Callers pass no secrets. */
@@ -237,7 +271,7 @@ export abstract class BaseCommand extends Command {
   protected resolveCredential(flags: AuthFlags): { credential: ResolvedCredential; profileName?: string; profile?: Profile } {
     const config = readConfig();
     const profileName = flags.profile ?? config.activeProfile;
-    const profile = profileName ? config.profiles[profileName] : undefined;
+    const profile = profileName ? getProfile(config, profileName) : undefined;
     const envAgentId = process.env[OIDC_ENV.AGENT_ID] || undefined;
 
     // Treat an empty-string flag/env (e.g. AGLEDGER_API_KEY="") as absent so the
@@ -368,7 +402,7 @@ export abstract class BaseCommand extends Command {
     if (problem) {
       this.failWith(
         ErrorCode.CONFIG_ERROR,
-        `The API URL from ${origin} (${JSON.stringify(apiUrl)}) ${problem}.`,
+        `The API URL from ${origin} (${JSON.stringify(redactUrl(apiUrl))}) ${problem}.`,
         ExitCode.USAGE_ERROR,
         'Give the full base URL of your AGLedger Server, scheme included, for example https://agledger.internal or http://localhost:3000.',
       );
@@ -433,7 +467,7 @@ export abstract class BaseCommand extends Command {
     const mask = (k: string): string => (k.length <= 4 ? '****' : `****${k.slice(-4)}`);
     const source = credential.kind === 'none' ? 'none' : credential.from;
     return {
-      apiUrl,
+      apiUrl: apiUrl === null ? null : redactUrl(apiUrl),
       apiKey: credential.kind === 'api-key' ? mask(credential.key) : null,
       source,
       credential: credential.kind === 'oidc' ? 'oidc-cert' : credential.kind,
@@ -491,11 +525,7 @@ export abstract class BaseCommand extends Command {
 
   protected output(data: unknown): void {
     if (this.isQuiet) return;
-    if (this.isJson) {
-      process.stdout.write(JSON.stringify(data) + '\n');
-    } else {
-      process.stdout.write(JSON.stringify(data, null, 2) + '\n');
-    }
+    process.stdout.write(this.isJson ? JSON.stringify(data) + '\n' : JSON.stringify(data, null, 2) + '\n');
   }
 
   protected outputNdjson(item: unknown): void {
@@ -526,7 +556,6 @@ export abstract class BaseCommand extends Command {
     try {
       return JSON.parse(source);
     } catch (err) {
-      if (err instanceof Error && err.message.startsWith('EEXIT:')) throw err;
       this.failWith(
         ErrorCode.INVALID_JSON_INPUT,
         `${fieldName} is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
@@ -601,7 +630,7 @@ export abstract class BaseCommand extends Command {
   }
 
   protected handleError(err: unknown): never {
-    if (err instanceof Error && err.message.startsWith('EEXIT:')) throw err;
+    if (err instanceof ExitError || err instanceof ConfigFileError) throw err;
     if (err instanceof OidcTokenSourceError) {
       this.failWith(
         ErrorCode.OIDC_TOKEN_SOURCE_FAILED,

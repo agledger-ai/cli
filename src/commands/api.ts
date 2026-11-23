@@ -1,6 +1,8 @@
-import { writeFileSync } from 'node:fs';
+import { accessSync, constants, statSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { Args, Flags } from '../cli/index.js';
 import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
+import { queryParams } from '../api-client.js';
 import { parseFields, FieldParseError, type FieldInput } from '../util/field-parser.js';
 
 /** Whether a string holds an ASCII control character (U+0000 to U+001F, or U+007F). */
@@ -10,6 +12,9 @@ function hasControlCharacter(text: string): boolean {
     return code <= 0x1f || code === 0x7f;
   });
 }
+
+/** The longest Idempotency-Key the Server takes. */
+const MAX_IDEMPOTENCY_KEY_LENGTH = 256;
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -65,7 +70,7 @@ export default class Api extends BaseCommand {
       char: 'F',
       multiple: true,
       description:
-        'Set a typed field as key=value: true/false/null, numbers, or JSON for {...}/[...]. Anything else is a string. Use -f for a value that must stay a string, such as an all-digit identifier. Supports nested (a.b.c=v) and array append (arr[]=v). Repeatable.',
+        'Set a typed field as key=value: true/false/null, numbers that print back as typed (0123 stays a string), or JSON for {...}/[...]. Anything else is a string. Use -f for a value that must stay a string, such as an all-digit identifier. Supports nested (a.b.c=v) and array append (arr[]=v). Repeatable.',
     }),
     'raw-field': Flags.string({
       char: 'f',
@@ -128,6 +133,26 @@ export default class Api extends BaseCommand {
         );
       }
 
+      const key = flags['idempotency-key'];
+      if (key !== undefined && !(key.length >= 1 && key.length <= MAX_IDEMPOTENCY_KEY_LENGTH && /^[\x20-\x7e]+$/.test(key))) {
+        this.failWith(
+          ErrorCode.MISSING_INPUT,
+          `--idempotency-key must be 1 to ${MAX_IDEMPOTENCY_KEY_LENGTH} printable ASCII characters, with no newline or control character.`,
+          ExitCode.USAGE_ERROR,
+          'Use a UUID, or any short opaque string unique to this logical operation.',
+        );
+      }
+
+      if (flags.output !== undefined) this.requireWritableOutput(flags.output);
+      if (flags.paginate && flags.output !== undefined) {
+        this.failWith(
+          ErrorCode.INVALID_METHOD,
+          '--paginate streams NDJSON to stdout and cannot be combined with --output',
+          ExitCode.USAGE_ERROR,
+          'Redirect the stream instead: agledger api GET <path> --paginate > pages.ndjson',
+        );
+      }
+
       const params = this.composeParams(flags);
 
       if (flags.paginate) {
@@ -152,6 +177,8 @@ export default class Api extends BaseCommand {
       }
       if (params !== undefined) {
         if (method === 'GET' || method === 'DELETE') {
+          // What a dry run shows is what is sent: a query with no wire form is refused here too.
+          queryParams(params);
           options.query = params as Record<string, unknown>;
         } else {
           options.body = params;
@@ -207,13 +234,57 @@ export default class Api extends BaseCommand {
         ? (body as { _raw: string })._raw
         : undefined;
     if (outputPath !== undefined) {
-      writeFileSync(outputPath, raw ?? JSON.stringify(body, null, 2) + '\n');
+      try {
+        writeFileSync(outputPath, raw ?? JSON.stringify(body, null, 2) + '\n');
+      } catch (err) {
+        // The request has been sent, and a write may have been applied. The body
+        // and the key it went out under are all the caller has of it.
+        if (raw === undefined) this.output(body);
+        else if (!this.isQuiet) process.stdout.write(raw);
+        const key = this.sentIdempotencyKey;
+        this.failWith(
+          ErrorCode.FILE_WRITE_ERROR,
+          `The response was received but cannot be written to ${outputPath}: ${err instanceof Error ? err.message : String(err)}. It was printed to stdout instead.`,
+          ExitCode.GENERAL_ERROR,
+          key
+            ? `The request was applied. Do not resend it without --idempotency-key ${key}, which replays the first result instead of recording the work twice.`
+            : 'The request was sent. Fix the path and rerun.',
+          key ? { idempotencyKey: key } : undefined,
+        );
+      }
       return;
     }
     if (raw === undefined) {
       this.output(body);
     } else if (!this.isQuiet) {
       process.stdout.write(raw);
+    }
+  }
+
+  /** Refuse an --output path that could not be written, before anything is sent. */
+  private requireWritableOutput(path: string): void {
+    let problem: string | undefined;
+    if (path === '') {
+      problem = 'is empty';
+    } else {
+      try {
+        if (statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
+          problem = 'is a directory';
+        } else {
+          // An existing file must be writable; a new one needs a writable directory.
+          accessSync(statSync(path, { throwIfNoEntry: false }) ? path : dirname(path), constants.W_OK);
+        }
+      } catch (err) {
+        problem = `cannot be written (${(err as NodeJS.ErrnoException).code ?? 'unknown error'})`;
+      }
+    }
+    if (problem) {
+      this.failWith(
+        ErrorCode.FILE_WRITE_ERROR,
+        `--output ${JSON.stringify(path)} ${problem}, so the request was not sent.`,
+        ExitCode.USAGE_ERROR,
+        'Give a path in a writable directory.',
+      );
     }
   }
 
@@ -281,10 +352,8 @@ export default class Api extends BaseCommand {
     params: unknown,
     dryRun: boolean,
   ): Promise<void> {
-    const baseQuery =
-      params && typeof params === 'object' && !Array.isArray(params)
-        ? { ...(params as Record<string, unknown>) }
-        : {};
+    queryParams(params);
+    const baseQuery = params ? { ...(params as Record<string, unknown>) } : {};
 
     if (dryRun) {
       this.dryRunOutput(
@@ -304,7 +373,15 @@ export default class Api extends BaseCommand {
         this.handleApiError(response);
       }
       const page = (response.body ?? {}) as Record<string, unknown>;
-      const items = (page.data ?? []) as unknown[];
+      if (!Array.isArray(page.data)) {
+        this.failWith(
+          ErrorCode.NOT_PAGINATED,
+          `The response from GET ${path} is not a paginated list (it has no "data" array), so there is nothing to stream.`,
+          ExitCode.USAGE_ERROR,
+          'Drop --paginate for a route that returns a single object, or check the path with `agledger api GET /openapi.json`.',
+        );
+      }
+      const items = page.data as unknown[];
       for (const item of items) {
         this.outputNdjson(item);
       }

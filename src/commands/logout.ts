@@ -1,6 +1,6 @@
 import { Flags } from '../cli/index.js';
 import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
-import { readConfig, writeConfig } from '../util/config.js';
+import { getProfile, readConfig, writeConfig } from '../util/config.js';
 
 export default class Logout extends BaseCommand {
   static override description =
@@ -13,7 +13,7 @@ export default class Logout extends BaseCommand {
   ];
 
   static override flags = {
-    ...BaseCommand.baseFlags,
+    ...BaseCommand.offlineFlags,
     profile: Flags.string({ description: 'Profile name to remove (default: the active profile)' }),
     all: Flags.boolean({ description: 'Remove all profiles', default: false }),
   };
@@ -49,7 +49,7 @@ export default class Logout extends BaseCommand {
         'Run `agledger config list` to see profiles, then `agledger logout --profile <name>`.',
       );
     }
-    if (!config.profiles[name]) {
+    if (!getProfile(config, name)) {
       this.failWith(
         ErrorCode.MISSING_INPUT,
         `Profile '${name}' not found, so nothing was removed.`,

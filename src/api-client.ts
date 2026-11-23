@@ -8,17 +8,6 @@ export interface ApiResponse {
 }
 
 /**
- * Serialize one query parameter.
- *
- * A plain object becomes the API's bracket notation (`metadata[key]=value`),
- * which is what the `criteria` and `metadata` filters on
- * GET /v1/records/search expect. Running it through `String(value)` instead
- * sent the literal `[object Object]`, so every such filter returned 400.
- *
- * A Date becomes ISO-8601 rather than the JS locale form, which the date-time
- * query params reject.
- */
-/**
  * A query value as text. The bracket form goes one level deep
  * (`criteriaGte[amount]=500`), so an object or array below that has no wire
  * form; it is refused rather than sent as `[object Object]`, which the Server
@@ -31,6 +20,17 @@ function queryText(name: string, value: unknown): string {
   throw new FieldParseError(name, 'a query parameter goes one level deep (a.b=v becomes a[b]=v); a nested object or array has no query-string form');
 }
 
+/**
+ * Serialize one query parameter.
+ *
+ * A plain object becomes the API's bracket notation (`metadata[key]=value`),
+ * which is what the `criteria` and `metadata` filters on
+ * GET /v1/records/search expect. Running it through `String(value)` instead
+ * sent the literal `[object Object]`, so every such filter returned 400.
+ *
+ * A Date becomes ISO-8601 rather than the JS locale form, which the date-time
+ * query params reject.
+ */
 function appendQueryParam(search: URLSearchParams, key: string, value: unknown): void {
   if (value instanceof Date) {
     search.set(key, value.toISOString());
@@ -51,6 +51,28 @@ function appendQueryParam(search: URLSearchParams, key: string, value: unknown):
     return;
   }
   search.set(key, queryText(key, value));
+}
+
+/**
+ * The query string a GET or DELETE carries, for a params value. Anything that
+ * has no query form is refused: a body that is not an object (`--data '[1,2]'`
+ * would send `?0=1&1=2`) and a null (the wire omits it, so a dry run that showed
+ * it would describe a request that is not sent).
+ */
+export function queryParams(query: unknown): URLSearchParams {
+  const search = new URLSearchParams();
+  if (query === undefined) return search;
+  if (query === null || typeof query !== 'object' || Array.isArray(query)) {
+    throw new FieldParseError('query', 'a GET or DELETE query must be a JSON object of parameters (key=value pairs)');
+  }
+  for (const [k, v] of Object.entries(query)) {
+    if (v === undefined) continue;
+    if (v === null) {
+      throw new FieldParseError(k, 'null has no query-string form; leave the parameter out');
+    }
+    appendQueryParam(search, k, v);
+  }
+  return search;
 }
 
 /**
@@ -135,11 +157,7 @@ export class ApiClient {
     const url = new URL(this.apiUrl + path);
 
     if (options?.query) {
-      for (const [k, v] of Object.entries(options.query)) {
-        if (v !== undefined && v !== null) {
-          appendQueryParam(url.searchParams, k, v);
-        }
-      }
+      for (const [k, v] of queryParams(options.query)) url.searchParams.append(k, v);
     }
 
     // Serialized once: with a cert credential the agent signature covers these

@@ -4,7 +4,9 @@
  * Conventions (modeled on `gh api`, which has the same two flags):
  * - `key=value`            → { key: "value" }
  * - `key=true|false|null`  → typed literal          (`-F` only)
- * - `key=42` / `key=3.14`  → number                 (`-F` only)
+ * - `key=42` / `key=3.14`  → number                 (`-F` only; only when the number
+ *                              prints back as typed, so `0123`, `-0` and 20-digit
+ *                              ids stay strings)
  * - `key=[...]` / `key={...}` → JSON-parsed array/object  (`-F` only)
  * - `a.b.c=value`          → nested: { a: { b: { c: "value" } } }
  * - `arr[]=a arr[]=b`      → { arr: ["a", "b"] }
@@ -41,8 +43,13 @@ function coerceValue(raw: string): unknown {
   if (raw === 'false') return false;
   if (raw === 'null') return null;
   if (raw === '') return '';
-  if (/^-?\d+$/.test(raw)) return Number(raw);
-  if (/^-?\d*\.\d+$/.test(raw)) return Number(raw);
+  // A number only when it reads back as the same text: 0123, -0 and an integer
+  // past 2^53 would otherwise reach the Server as a different value than typed.
+  if (/^-?\d*\.?\d+$/.test(raw)) {
+    const number = Number(raw);
+    if (Number.isFinite(number) && String(number) === raw) return number;
+    return raw;
+  }
   // JSON literals only if clearly bracketed, which avoids misinterpreting strings.
   if ((raw.startsWith('{') && raw.endsWith('}')) || (raw.startsWith('[') && raw.endsWith(']'))) {
     try {

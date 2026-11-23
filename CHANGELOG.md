@@ -22,11 +22,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - The package is linted with oxlint, type-aware, in CI and before a release.
 - Help and README text describe the export a caller holds rather than the Server's storage, and no longer point at tooling or documents that are not published.
 - **`agledger verify` fails an export cut from the end.** The export is held to the two entry counts it states: fewer entries than `exportMetadata.expectedEntries`, the position of the record's latest checkpoint, is `CHECKPOINT_ROW_MISSING`, and fewer than `exportMetadata.totalEntries` is `CHAIN_POSITION_GAP`. The human report has an `Entry count` line saying which count the chain was held to, and `--json` carries `entryCount`. An export that verified on 2.1.0 with its tail removed now fails.
+- Commands that make no API call (`config`, `logout`, `list-commands`, `help-json`) no longer list the credential flags in `--help`; they are still accepted.
 - `--idempotency-key` help says what a 409 `IDEMPOTENCY_KEY_IN_FLIGHT`, a 409 `IDEMPOTENT_WRITE_COMMITTED` and a 503 `SERVER_SHUTTING_DOWN` ask of the caller.
 
 ### Fixed
 
 - **A query parameter nested below the bracket form is refused, and nothing is sent.** `-F a.b=v` becomes `a[b]=v`; one level deeper (`-F a.b.c=v`) or an object inside an array used to be sent as `[object Object]`, which the Server read as a filter on that string. It now exits 2 with `INVALID_FIELD`.
+- **Global flags before the command work.** `agledger --json api GET /health` and `agledger --quiet api ...` failed (`Unexpected argument`, or exit 2 with no output); the command is now found wherever it sits among the leading flags.
+- **A corrupt `~/.agledger/config.json` is an error, not an empty store.** It was read as having no profiles, so the next `login` overwrote the file and lost every profile. A file that does not parse now exits 2 `CONFIG_ERROR` and is left alone. The file is written through a temporary file and a rename, and the directory is set to 0700 even when it already existed.
+- `login --api-key NEW` without `--api-url` keeps the stored profile's URL instead of dropping it.
+- A profile name such as `toString` or `__proto__` names no profile.
+- `--paginate` on a response with no `data` array exits 2 `NOT_PAGINATED` instead of printing nothing and exiting 0; `--paginate` with `--output` is refused.
+- **`--output` is checked before the request is sent.** An unwritable path, a directory or an empty value exits 2 without sending, so a POST is no longer applied and then lost to a failed file write. If the write still fails afterwards, the response body is printed to stdout and the error carries the `idempotencyKey`.
+- A reader that closes the pipe (`agledger api GET /v1/records --paginate | head -1`) ends the command quietly with code 0 instead of printing a stack trace.
+- **`-F` types a number only when it prints back as typed.** `0123`, `-0`, `1.0` and `12345678901234567890` stay strings; they reached the Server as `123`, `0`, `1` and `12345678901234567000`. Use `-f` for an identifier that must stay a string.
+- A query the request cannot carry is refused, and `--dry-run` shows what is sent: `-F status=null` on a GET (the null was omitted on the wire but shown in the dry run) and a non-object `--data` on a GET or DELETE (`--data '[1,2]'` sent `?0=1&1=2`) exit 2 `INVALID_FIELD`.
+- **`-F a=1 GET /health` parses.** A `-F` or `-f` takes following words only while they are shaped `key=value`, and a flag such as `--dry-run` ends the run, so positionals after a field are positionals.
+- An API URL with a user name or password (`http://user:pw@host`) exits 2 `CONFIG_ERROR` with the URL redacted; the password was echoed in an `UNKNOWN_ERROR`.
+- `--idempotency-key` with a newline, a non-printable character, no characters or more than 256 is a usage error (exit 2); it surfaced as an `UNKNOWN_ERROR` from the HTTP layer.
+- `-h` and `agledger help [command]` print help. `--help` is not read as a request for help when it is the value of a flag (`--data --help`) or follows `--`, and `--json` and `--quiet` are read from the parsed flags.
 - **`npm pack` on an installed copy of the package no longer deletes its `dist/`.** `prepack` ran the build, which begins by clearing `dist/`, and an installed copy has no sources to rebuild from, so packing one (to vendor it, or to mirror it for an air-gapped install) left the package without its code. `prepack` now builds only in a source checkout.
 
 ## [2.1.0] - 2026-11-05

@@ -4,6 +4,15 @@ import type { ArgDef, FlagDef } from './flags.js';
 /** A command line the parser refuses: an unknown flag, a missing value or argument. */
 export class UsageError extends Error {}
 
+/** The arguments up to a `--`, past which nothing is a flag. */
+export function beforeTerminator(argv: readonly string[]): readonly string[] {
+  const end = argv.indexOf('--');
+  return end === -1 ? argv : argv.slice(0, end);
+}
+
+/** A `-F`/`-f` field as it is written: a path (letters, digits, `_`, `.`, `-`, `[]`) then `=`. */
+const FIELD_SHAPE = /^[A-Za-z_][\w.[\]-]*=/;
+
 export interface ParseResult {
   args: Record<string, string | undefined>;
   flags: Record<string, string | string[] | boolean | undefined>;
@@ -47,8 +56,9 @@ export function parse(
   const flags: ParseResult['flags'] = {};
   const positionals: string[] = [];
   // The repeatable flag still taking bare values: `-F a=1 b=2` reads b=2 as a
-  // second -F unless the flag is non-greedy. Only a flag that takes a value, or
-  // the `--` terminator, ends it.
+  // second -F unless the flag is non-greedy. A bare value joins it only when it
+  // is shaped KEY=VALUE, so `-F a=1 GET /health` still has its two positionals.
+  // Any other flag, or the `--` terminator, ends the run.
   let greedy: string | undefined;
 
   for (const token of tokens) {
@@ -57,10 +67,11 @@ export function parse(
       continue;
     }
     if (token.kind === 'positional') {
-      if (greedy !== undefined) {
+      if (greedy !== undefined && FIELD_SHAPE.test(token.value)) {
         (flags[greedy] as string[]).push(token.value);
       } else {
         positionals.push(token.value);
+        greedy = undefined;
       }
       continue;
     }
@@ -73,6 +84,7 @@ export function parse(
     if (def.type === 'boolean') {
       if (token.inlineValue === true) throw new UsageError(`Flag ${rawName} does not take a value`);
       flags[name] = true;
+      greedy = undefined;
       continue;
     }
     if (token.value === undefined) throw new UsageError(`Flag ${rawName} expects a value`);

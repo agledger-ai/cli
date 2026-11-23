@@ -16,7 +16,7 @@ export interface CliConfig {
 export class ExitError extends Error {
   readonly exitCode: number;
   constructor(exitCode: number) {
-    super(`EEXIT: ${exitCode}`);
+    super(`exit ${exitCode}`);
     this.name = 'ExitError';
     this.exitCode = exitCode;
   }
@@ -51,6 +51,9 @@ export abstract class Command {
   /** Flags every command accepts, listed before the command's own. */
   static baseFlags?: Record<string, FlagDef>;
 
+  /** The flags `parse` read, kept so a command reads --json and --quiet from them rather than from raw argv. */
+  protected parsedFlags?: Record<string, unknown>;
+
   constructor(
     protected readonly argv: readonly string[],
     readonly config: CliConfig,
@@ -66,6 +69,7 @@ export abstract class Command {
     flags: ParsedFlags<NonNullable<C['baseFlags']> & NonNullable<C['flags']>>;
   }> {
     const { args, flags } = parse(this.argv, command.args ?? {}, allFlags(command));
+    this.parsedFlags = flags;
     return Promise.resolve({
       args: args as ParsedArgs<NonNullable<C['args']>>,
       flags: flags as ParsedFlags<NonNullable<C['baseFlags']> & NonNullable<C['flags']>>,

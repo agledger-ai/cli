@@ -3,7 +3,7 @@ import { Flags } from '../cli/index.js';
 import { ApiClient } from '../api-client.js';
 import { BaseCommand, ErrorCode, ExitCode, argvHasFlag } from '../base.js';
 import { OIDC_ENV, fetchOidcToken } from '../oidc.js';
-import { readConfig, writeConfig, type Profile } from '../util/config.js';
+import { getProfile, readConfig, writeConfig, type Profile } from '../util/config.js';
 
 /**
  * Verify a credential against the API, then persist it to
@@ -74,7 +74,10 @@ export default class Login extends BaseCommand {
         this.handleApiError(response);
       }
 
-      this.save(flags.profile, { apiKey, apiUrl: flags['api-url'] || undefined });
+      // A new key for a stored profile keeps that profile's URL: the call above
+      // already went there, so dropping it would store a key with nowhere to use it.
+      const apiUrl = flags['api-url'] || getProfile(readConfig(), flags.profile)?.apiUrl;
+      this.save(flags.profile, { apiKey, apiUrl });
       this.output({ authenticated: true, profile: flags.profile, account: response.body });
     } catch (err) {
       this.handleError(err);

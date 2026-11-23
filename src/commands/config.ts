@@ -1,6 +1,6 @@
 import { Args, Flags } from '../cli/index.js';
 import { BaseCommand, ErrorCode, ExitCode } from '../base.js';
-import { configPath, readConfig, writeConfig, type Profile } from '../util/config.js';
+import { configPath, getProfile, readConfig, writeConfig, type Profile } from '../util/config.js';
 
 /** What kind of credential a profile holds. Never echoes the key itself. */
 function credentialOf(p: Profile): 'api-key' | 'oidc-cert' | 'none' {
@@ -36,19 +36,19 @@ export default class Config extends BaseCommand {
   };
 
   static override flags = {
-    ...BaseCommand.baseFlags,
+    ...BaseCommand.offlineFlags,
     profile: Flags.string({ description: 'Profile name to inspect (for `get`)' }),
   };
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(Config);
+    if (args.action === 'path') {
+      this.output({ path: configPath() });
+      return;
+    }
     const config = readConfig();
 
     switch (args.action) {
-      case 'path':
-        this.output({ path: configPath() });
-        return;
-
       case 'list': {
         const profiles = Object.entries(config.profiles).map(([name, p]) => ({
           name,
@@ -69,7 +69,7 @@ export default class Config extends BaseCommand {
             ExitCode.USAGE_ERROR,
           );
         }
-        const profile = config.profiles[name];
+        const profile = getProfile(config, name);
         if (!profile) {
           this.failWith(
             ErrorCode.MISSING_INPUT,
@@ -99,7 +99,7 @@ export default class Config extends BaseCommand {
             'Example: agledger config use prod',
           );
         }
-        if (!config.profiles[target]) {
+        if (!getProfile(config, target)) {
           this.failWith(
             ErrorCode.MISSING_INPUT,
             `Profile '${target}' not found.`,
