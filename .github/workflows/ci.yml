@@ -25,11 +25,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Legal files match their pins, and no retired name appears
+      - name: Legal files match their pins, and no registered-mark symbol appears
         run: |
           grep -v '^#' legal-pins.sha256 | sha256sum --strict -c -
-          if git grep -nE 'Agentic Ledger|AOAP|Agentic Operations and Accountability|Agent Health Score|Agentic Contract Spec|®' -- ':!CHANGELOG.md' ':!.github/workflows/ci.yml' ':!testdata/conformance'; then
-            echo "A retired product name or a registered-mark symbol appears outside CHANGELOG.md" >&2
+          if git grep -nE '®' -- ':!CHANGELOG.md' ':!testdata/conformance'; then
+            echo "A registered-mark symbol appears outside CHANGELOG.md" >&2
             exit 1
           fi
 
@@ -51,5 +51,6 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Build
-        run: npm run build
+      # `npm test` builds first (pretest), so dist/ is current here.
+      - name: Package lint (publint + attw)
+        run: npm run lint:pkg

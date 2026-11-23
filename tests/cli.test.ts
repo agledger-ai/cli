@@ -25,7 +25,7 @@ import { evidenceBodiesLine, flagWording, peerMessagesLine } from '../src/comman
 const BIN = resolve(import.meta.dirname, '../bin/run.js');
 
 /**
- * A spawn's own deadline. Each one boots node and oclif, which under a loaded
+ * A spawn's own deadline. Each one boots node, which under a loaded
  * machine (a parallel suite, CI) can take well over 10s; a kill at that point
  * reads as exit 1 with empty output, a failure that is not the CLI's.
  */

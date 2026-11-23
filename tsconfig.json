@@ -14,7 +14,6 @@
     "declaration": true,
     "declarationMap": false,
     "sourceMap": false,
-    "experimentalDecorators": true,
     "outDir": "dist",
     "rootDir": "src"
   },

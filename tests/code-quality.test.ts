@@ -1,10 +1,5 @@
 /**
- * Source hygiene checks over this package's own code.
- *
- * Repo-scoped copy (cli is its own source-of-truth repo). Mirrors the checks
- * the AGLedger monorepo enforced, narrowed to this package's `src`. The CLI is
- * not an offline verifier, so the no-network block is intentionally omitted.
- * Run with `npm test`.
+ * Source hygiene checks over this package's own code. Run with `npm test`.
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
