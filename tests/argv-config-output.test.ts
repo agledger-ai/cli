@@ -377,3 +377,37 @@ describe('--idempotency-key', () => {
     rmSync(h, { recursive: true, force: true });
   });
 });
+
+describe('the exit code for each API error status, as the README documents', () => {
+  it.each([
+    [400, 1],
+    [401, 3],
+    [403, 4],
+    [404, 5],
+    [409, 6],
+    [429, 7],
+    [500, 8],
+    [503, 8],
+  ])('HTTP %i exits %i and passes the Server body through', async (status, code) => {
+    const h = home();
+    const server: Server = createServer((req, res) => {
+      req.resume();
+      res.statusCode = status;
+      // No Retry-After, so a 429 or 5xx is not waited on.
+      res.setHeader('content-type', 'application/problem+json');
+      res.end(JSON.stringify({ status, error: 'SOME_CODE', detail: `status ${status}` }));
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    try {
+      const { port } = server.address() as { port: number };
+      const result = await cli(['api', 'GET', '/v1/records', '--api-url', `http://127.0.0.1:${port}`, '--api-key', 'k'], h, {
+        AGLEDGER_MAX_RETRIES: '0',
+      });
+      expect(result.exitCode).toBe(code);
+      expect(errorOf(result)).toMatchObject({ error: 'SOME_CODE', detail: `status ${status}` });
+    } finally {
+      server.close();
+      rmSync(h, { recursive: true, force: true });
+    }
+  });
+});
