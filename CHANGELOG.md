@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
+- **A query parameter nested below the bracket form is refused, and nothing is sent.** `-F a.b=v` becomes `a[b]=v`; one level deeper (`-F a.b.c=v`) or an object inside an array used to be sent as `[object Object]`, which the Server read as a filter on that string. It now exits 2 with `INVALID_FIELD`.
 - **`npm pack` on an installed copy of the package no longer deletes its `dist/`.** `prepack` ran the build, which begins by clearing `dist/`, and an installed copy has no sources to rebuild from, so packing one (to vendor it, or to mirror it for an air-gapped install) left the package without its code. `prepack` now builds only in a source checkout.
 
 ## [2.1.0] - 2026-11-05

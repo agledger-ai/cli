@@ -1,3 +1,4 @@
+import { FieldParseError } from './util/field-parser.js';
 import type { DelegationToken, OidcCertCredential } from './oidc.js';
 
 export interface ApiResponse {
@@ -17,17 +18,17 @@ export interface ApiResponse {
  * A Date becomes ISO-8601 rather than the JS locale form, which the date-time
  * query params reject.
  */
-/** A query value as text: a Date as ISO-8601, an array joined by commas, an object as `[object Object]`. */
-function queryText(value: unknown): string {
+/**
+ * A query value as text. The bracket form goes one level deep
+ * (`criteriaGte[amount]=500`), so an object or array below that has no wire
+ * form; it is refused rather than sent as `[object Object]`, which the Server
+ * would read as a filter on that literal string.
+ */
+function queryText(name: string, value: unknown): string {
   if (value instanceof Date) return value.toISOString();
-  if (Array.isArray(value)) return value.join(',');
-  if (value === null) return 'null';
-  if (typeof value === 'object' || typeof value === 'function') return Object.prototype.toString.call(value);
   if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint' || typeof value === 'symbol') {
-    return String(value);
-  }
-  return 'undefined';
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+  throw new FieldParseError(name, 'a query parameter goes one level deep (a.b=v becomes a[b]=v); a nested object or array has no query-string form');
 }
 
 function appendQueryParam(search: URLSearchParams, key: string, value: unknown): void {
@@ -38,21 +39,18 @@ function appendQueryParam(search: URLSearchParams, key: string, value: unknown):
   if (Array.isArray(value)) {
     for (const item of value) {
       if (item === undefined || item === null) continue;
-      search.append(key, queryText(item));
+      search.append(key, queryText(key, item));
     }
     return;
   }
   if (typeof value === 'object') {
     for (const [sub, subValue] of Object.entries(value as Record<string, unknown>)) {
       if (subValue === undefined || subValue === null) continue;
-      search.set(
-        `${key}[${sub}]`,
-        queryText(subValue),
-      );
+      search.set(`${key}[${sub}]`, queryText(`${key}.${sub}`, subValue));
     }
     return;
   }
-  search.set(key, queryText(value));
+  search.set(key, queryText(key, value));
 }
 
 /**

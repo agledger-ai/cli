@@ -10,6 +10,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { FieldParseError } from '../src/util/field-parser.js';
 import { ApiClient } from '../src/api-client.js';
 import { DelegationToken, OidcTokenSourceError, type OidcTokenSource } from '../src/oidc.js';
 
@@ -75,6 +76,14 @@ describe('ApiClient query serialization', () => {
     expect(url).toContain('traceId=0af7651916cd43dd8448eb211c80319c');
     expect(url).toContain('originRecordId=5b1a2f0e');
     expect(url).not.toContain('[object Object]');
+  });
+
+  it('refuses a query value nested below the bracket form instead of sending [object Object]', async () => {
+    const mockFetch = stubOk();
+    const client = new ApiClient('https://api.test.com', 'key');
+    await expect(client.request('GET', '/v1/records/search', { query: { criteriaGte: { amount: { min: 1 } } } })).rejects.toThrow(FieldParseError);
+    await expect(client.request('GET', '/v1/records/search', { query: { ids: [{ id: 'a' }] } })).rejects.toThrow(FieldParseError);
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('drops null and undefined members rather than sending them', async () => {
