@@ -3,7 +3,7 @@
  * 401 retry, and agent body signing. Every network call is a stubbed fetch.
  */
 import { createHash, createPublicKey, verify } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -12,11 +12,13 @@ import { execSync } from 'node:child_process';
 import {
   AgentKeysFileError,
   DelegationToken,
+  KEYS_FILE_LOCK,
   TOKEN_COMMAND_LIMITS,
   OidcCertCredential,
   OidcExchangeError,
   OidcTokenSourceError,
   fetchOidcToken,
+  recordAgentKey,
   scrub,
   type OidcTokenSource,
 } from '../src/oidc.js';
@@ -128,6 +130,51 @@ describe('token source', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  describe('agent keys file shared by concurrent writers', () => {
+    const keyEntry = (i: number) => ({ publicKeyJwk: { kty: 'OKP' as const, crv: 'Ed25519' as const, x: `key-${i}` }, certId: `c-${i}` });
+    let dir: string;
+    let file: string;
+    const saved = { ...KEYS_FILE_LOCK };
+    afterEach(() => {
+      Object.assign(KEYS_FILE_LOCK, saved);
+      rmSync(dir, { recursive: true, force: true });
+    });
+    const setup = () => {
+      dir = mkdtempSync(join(tmpdir(), 'agent-keys-'));
+      file = join(dir, 'agent-keys.json');
+    };
+
+    it('keeps every key when many writers add at once, and leaves no lock behind', async () => {
+      setup();
+      await Promise.all(Array.from({ length: 24 }, (_, i) => recordAgentKey(file, keyEntry(i))));
+      const doc = JSON.parse(readFileSync(file, 'utf8')) as { keys: Array<{ publicKeyJwk: { x: string } }> };
+      expect(doc.keys.map((k) => k.publicKeyJwk.x).sort()).toEqual(Array.from({ length: 24 }, (_, i) => `key-${i}`).sort());
+      expect(existsSync(`${file}.lock`)).toBe(false);
+    });
+
+    it('takes over a lock left by a process that died holding it', async () => {
+      setup();
+      writeFileSync(`${file}.lock`, '');
+      const old = (Date.now() - KEYS_FILE_LOCK.staleMs - 5_000) / 1000;
+      utimesSync(`${file}.lock`, old, old);
+      await recordAgentKey(file, keyEntry(1));
+      expect((JSON.parse(readFileSync(file, 'utf8')) as { keys: unknown[] }).keys).toHaveLength(1);
+      expect(existsSync(`${file}.lock`)).toBe(false);
+    });
+
+    it('gives up on a lock another process holds, naming the lock file, and writes nothing', async () => {
+      setup();
+      KEYS_FILE_LOCK.waitMs = 100;
+      writeFileSync(`${file}.lock`, '');
+      const err = await recordAgentKey(file, keyEntry(1)).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(AgentKeysFileError);
+      expect((err as Error).message).toContain(`${file}.lock`);
+      expect(existsSync(file)).toBe(false);
+      // The held lock is not ours to remove.
+      expect(existsSync(`${file}.lock`)).toBe(true);
+    });
   });
 
   it('refuses an agent keys file that is not a JWK Set, before any request is signed under the cert', async () => {

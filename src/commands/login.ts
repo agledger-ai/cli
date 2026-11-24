@@ -57,7 +57,7 @@ export default class Login extends BaseCommand {
         'With --oidc: a JWK Set file every cert exchange adds its public key to, before the cert is used. Each ' +
         'command exchanges for a cert with a key pair of its own, and an agent signature can be re-verified ' +
         'offline only under that key: pass this file to `agledger verify --agent-keys` (or agledger-verify ' +
-        '--agent-keys). Holds public keys only. Stored in the profile.',
+        '--agent-keys). Commands running at once can share one file. Holds public keys only. Stored in the profile.',
       env: OIDC_ENV.AGENT_KEYS_FILE,
     }),
   };
