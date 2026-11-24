@@ -5,7 +5,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "bin": {
-    "agledger": "./bin/run.js"
+    "agledger": "bin/run.js"
   },
   "files": [
     "dist",

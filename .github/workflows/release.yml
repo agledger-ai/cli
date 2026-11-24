@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   publish:
-    # The `release` environment has no required reviewer: a `v*` tag push publishes.
+    # The release environment holds the publishing permissions.
     environment: release
     runs-on: ubuntu-latest
     steps:
